@@ -1,0 +1,14 @@
+# runtime data
+/data/
+config.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# os
+.DS_Store

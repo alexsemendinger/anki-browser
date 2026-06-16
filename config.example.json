@@ -1,0 +1,29 @@
+{
+  "ankiconnect_url": "http://127.0.0.1:8765",
+  "ankiconnect_version": 6,
+  "data_dir": "data",
+  "default_deck": "Default",
+  "repair_flags": [1, 2],
+  "grid_show_backs": true,
+  "grid_mathjax": true,
+  "mathjax_url": "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+  "send_back_requires_comment": false,
+  "session": {
+    "target_enabled": false,
+    "target_default": 10
+  },
+  "beeminder": {
+    "enabled": false,
+    "username": "",
+    "auth_token": "",
+    "goal": "",
+    "push_on": "session_end",
+    "count": {
+      "approve": true,
+      "delete": true,
+      "repair": true,
+      "send_back": false,
+      "exemplar": false
+    }
+  }
+}

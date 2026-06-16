@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anki Deck Workbench</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="topbar">
+    <nav id="tabs">
+      <button data-surface="inbox" class="tab active">1 inbox <span class="badge" id="inbox-badge"></span></button>
+      <button data-surface="repair" class="tab">2 repair <span class="badge" id="repair-badge"></span></button>
+      <button data-surface="survey" class="tab">3 survey</button>
+      <button data-surface="stats" class="tab">4 stats</button>
+    </nav>
+    <div id="topright">
+      <span id="session" class="muted"></span>
+      <span id="anki-dot" class="dot" title="Anki"></span>
+      <span id="mode" class="mode">NORMAL</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- inbox -->
+    <section id="surface-inbox" class="surface">
+      <div class="single">
+        <div class="cardmeta" id="inbox-meta"></div>
+        <div class="cardframe" id="inbox-frame"></div>
+        <div class="comments" id="inbox-comments"></div>
+      </div>
+      <div class="empty" id="inbox-empty" hidden>inbox empty</div>
+    </section>
+
+    <!-- repair -->
+    <section id="surface-repair" class="surface" hidden>
+      <div class="single">
+        <div class="cardmeta" id="repair-meta"></div>
+        <div class="cardframe" id="repair-frame"></div>
+      </div>
+      <div class="empty" id="repair-empty" hidden>no flagged cards</div>
+    </section>
+
+    <!-- survey -->
+    <section id="surface-survey" class="surface" hidden>
+      <div id="survey-filters">
+        <select id="f-deck"><option value="">deck</option></select>
+        <input id="f-tag" placeholder="tag" size="8" />
+        <input id="f-added" placeholder="added days" size="9" />
+        <input id="f-lapses" placeholder="lapses ≥" size="8" />
+        <label><input type="checkbox" id="f-due" /> due</label>
+        <button id="f-apply">apply</button>
+        <button id="f-flip">flip all</button>
+        <span class="muted" id="survey-count"></span>
+      </div>
+      <div id="grid"></div>
+    </section>
+
+    <!-- stats -->
+    <section id="surface-stats" class="surface" hidden>
+      <div id="stats-grid"></div>
+      <h3 class="muted">exemplars</h3>
+      <div id="exemplar-list"></div>
+    </section>
+  </main>
+
+  <!-- editor overlay (edit / repair) -->
+  <div id="editor" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-title" id="editor-title">edit</div>
+      <div id="editor-fields"></div>
+      <div class="hint muted">Ctrl+Enter save · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- comment overlay -->
+  <div id="commenter" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-title">send back</div>
+      <textarea id="comment-text" rows="4"></textarea>
+      <div class="hint muted">Ctrl+Enter send · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- exemplar good/bad prompt -->
+  <div id="exemplar-prompt" class="overlay" hidden>
+    <div class="panel small">
+      <div class="panel-title">exemplar</div>
+      <div class="choices">g good · b bad · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- session start -->
+  <div id="session-prompt" class="overlay" hidden>
+    <div class="panel small">
+      <div class="panel-title">session target</div>
+      <input id="session-target" type="number" min="1" placeholder="count (blank = none)" />
+      <div class="hint muted">Enter start · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- help -->
+  <div id="help" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-title">keys</div>
+      <div id="help-body"></div>
+      <div class="hint muted">? or Esc close</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

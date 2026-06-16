@@ -1,0 +1,13 @@
+{
+  "id": "sample-cloze-003",
+  "note_type": "Cloze",
+  "deck": "Default",
+  "fields": {
+    "Text": "The capital of {{c1::France}} is {{c2::Paris}}.",
+    "Back Extra": "Western Europe."
+  },
+  "tags": ["sample", "ai", "geo"],
+  "source": "ai",
+  "created": "2026-06-16T09:02:00+00:00",
+  "comment_history": []
+}

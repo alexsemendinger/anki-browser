@@ -1,0 +1,19 @@
+{
+  "id": "sample-latex-002",
+  "note_type": "Basic",
+  "deck": "Default",
+  "fields": {
+    "Front": "Euler's identity?",
+    "Back": "\\(e^{i\\pi} + 1 = 0\\)"
+  },
+  "tags": ["sample", "ai", "math"],
+  "source": "ai",
+  "created": "2026-06-16T09:01:00+00:00",
+  "comment_history": [
+    {
+      "date": "2026-06-16T09:05:00+00:00",
+      "author": "me",
+      "text": "back should show the derivation, not just the identity"
+    }
+  ]
+}

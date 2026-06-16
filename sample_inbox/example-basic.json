@@ -1,0 +1,13 @@
+{
+  "id": "sample-basic-001",
+  "note_type": "Basic",
+  "deck": "Default",
+  "fields": {
+    "Front": "What does AnkiConnect listen on by default?",
+    "Back": "<code>127.0.0.1:8765</code>"
+  },
+  "tags": ["sample", "ai"],
+  "source": "ai",
+  "created": "2026-06-16T09:00:00+00:00",
+  "comment_history": []
+}
