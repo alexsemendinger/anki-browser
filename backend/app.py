@@ -100,9 +100,38 @@ def create_app(cfg=None):
 
     @app.post("/api/inbox/<card_id>/approve")
     def inbox_approve(card_id):
+        """Approve one of a note's cards. The note is only sent to Anki once
+        EVERY card it generates has been approved (addNote is atomic -- you
+        can't add c1's card without c2's). A partial approval is just persisted
+        on the inbox file; the final one commits the whole note."""
         card = inbox.get_card(paths["inbox"], card_id)
         if card is None:
             return jsonify({"error": "not found"}), 404
+        # the renderer is the authority on which cards this note generates
+        ordinals = [c["ordinal"] for c in renderer.render_provisional(card)["cards"]]
+        approved = list(card.get("approved_cards", []))
+        body = request.get_json(silent=True) or {}
+        ordinal = body.get("ordinal")
+        if ordinal is None:
+            pending = [o for o in ordinals if o not in approved]
+            ordinal = pending[0] if pending else ordinals[-1]
+        ordinal = int(ordinal)
+        new_approved = sorted(set(approved) | {ordinal})
+
+        if set(new_approved) < set(ordinals):
+            # not all cards approved yet -- persist and stay in the inbox
+            inbox.set_approved(paths["inbox"], card_id, new_approved)
+            actions.push(
+                paths["actions"],
+                "approve_card",
+                {"card_id": card_id, "ordinal": ordinal},
+                "approve card",
+            )
+            return jsonify(
+                {"ok": True, "committed": False, "ordinals": ordinals, "approved_cards": new_approved}
+            )
+
+        # every card approved -> send the whole note to Anki
         try:
             note_id = anki.add_note(
                 card.get("deck") or cfg["default_deck"],
@@ -116,6 +145,8 @@ def create_app(cfg=None):
             return jsonify({"error": "add failed", "detail": str(exc)}), 409
         inbox.remove_card(paths["inbox"], card_id)
         stats.record(paths["stats"], "approve")
+        # `card` still carries the pre-commit approvals, so undo restores the
+        # inbox file to "one card left" rather than a fully-fresh note.
         actions.push(
             paths["actions"],
             "approve",
@@ -124,7 +155,9 @@ def create_app(cfg=None):
         )
         _bump_session(paths["session"], 1)
         maybe_push_beeminder()
-        return jsonify({"ok": True, "note_id": note_id, "remaining": inbox.count(paths["inbox"])})
+        return jsonify(
+            {"ok": True, "committed": True, "note_id": note_id, "remaining": inbox.count(paths["inbox"])}
+        )
 
     @app.post("/api/inbox/<card_id>/delete")
     def inbox_delete(card_id):
@@ -159,11 +192,14 @@ def create_app(cfg=None):
         if card is None:
             return jsonify({"error": "not found"}), 404
         old_fields = card.get("fields", {})
-        card = inbox.update_fields(paths["inbox"], card_id, fields)
+        old_approved = list(card.get("approved_cards", []))
+        inbox.update_fields(paths["inbox"], card_id, fields)
+        # content changed -> prior per-card approvals are stale, re-review
+        card = inbox.set_approved(paths["inbox"], card_id, [])
         actions.push(
             paths["actions"],
             "edit_inbox",
-            {"card_id": card_id, "old_fields": old_fields},
+            {"card_id": card_id, "old_fields": old_fields, "old_approved": old_approved},
             "edit",
         )
         return jsonify({"ok": True, "card": card, "rendered": renderer.render_provisional(card)})
@@ -310,8 +346,17 @@ def create_app(cfg=None):
                 inbox.pop_comment(paths["inbox"], payload["card_id"])
                 stats.pop_last(paths["stats"])
                 _bump_session(paths["session"], -1)
+            elif kind == "approve_card":
+                c = inbox.get_card(paths["inbox"], payload["card_id"])
+                if c is not None:
+                    inbox.set_approved(
+                        paths["inbox"],
+                        payload["card_id"],
+                        [o for o in c.get("approved_cards", []) if o != payload["ordinal"]],
+                    )
             elif kind == "edit_inbox":
                 inbox.update_fields(paths["inbox"], payload["card_id"], payload["old_fields"])
+                inbox.set_approved(paths["inbox"], payload["card_id"], payload.get("old_approved", []))
             elif kind == "repair":
                 anki.update_note_fields(payload["note_id"], payload["old_fields"])
                 if payload.get("card_id"):

@@ -1,7 +1,7 @@
 {
   "id": "sample-latex-002",
   "note_type": "Basic",
-  "deck": "Default",
+  "deck": "Z::Deletable",
   "fields": {
     "Front": "Euler's identity?",
     "Back": "\\(e^{i\\pi} + 1 = 0\\)"

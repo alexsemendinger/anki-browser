@@ -14,7 +14,11 @@ File shape:
   "tags": ["ai"],
   "source": "ai" | "manual",
   "created": "<iso8601>",
-  "comment_history": [{"date": "<iso>", "author": "...", "text": "..."}]
+  "comment_history": [{"date": "<iso>", "author": "...", "text": "..."}],
+  "approved_cards": [1, 2]   # ordinals approved so far; note is sent to Anki
+                             # only once every card it generates is approved.
+                             # Additive/optional -- old files and generators
+                             # that omit it default to [] (nothing approved).
 }
 """
 import json
@@ -40,6 +44,7 @@ def _normalize(card, card_id):
     card.setdefault("source", "manual")
     card.setdefault("created", _now())
     card.setdefault("comment_history", [])
+    card.setdefault("approved_cards", [])  # ordinals approved so far (gate to send)
     return card
 
 
@@ -78,6 +83,16 @@ def update_fields(inbox_dir, card_id, fields):
     if card is None:
         return None
     card["fields"] = fields
+    return save_card(inbox_dir, card)
+
+
+def set_approved(inbox_dir, card_id, ordinals):
+    """Set the list of per-card approvals (cloze ordinals) on a provisional
+    note. The note is sent to Anki only once every card is approved."""
+    card = get_card(inbox_dir, card_id)
+    if card is None:
+        return None
+    card["approved_cards"] = sorted({int(o) for o in ordinals})
     return save_card(inbox_dir, card)
 
 

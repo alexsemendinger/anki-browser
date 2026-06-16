@@ -70,6 +70,16 @@ class FakeAnki:
         return ["Default"]
 
     def model_templates(self, model):
+        if model == "Basic (and reversed card)":
+            return {
+                "Card 1": {"Front": "{{Front}}", "Back": "{{FrontSide}}<hr>{{Back}}"},
+                "Card 2": {"Front": "{{Back}}", "Back": "{{FrontSide}}<hr>{{Front}}"},
+            }
+        if model == "Basic (optional reversed card)":
+            return {
+                "Card 1": {"Front": "{{Front}}", "Back": "{{FrontSide}}<hr>{{Back}}"},
+                "Card 2": {"Front": "{{#Add Reverse}}{{Back}}{{/Add Reverse}}", "Back": "{{Front}}"},
+            }
         return {"Card 1": {"Front": "{{Front}}", "Back": "{{FrontSide}}<hr>{{Back}}"}}
 
     def model_styling(self, model):

@@ -107,6 +107,23 @@ def cloze_field_name(fields):
     return None
 
 
+def cloze_ordinals(fields):
+    """Sorted distinct cloze ordinals across all fields (a cloze note with c1
+    and c2 -> [1, 2]). Each ordinal is a separate card Anki will generate.
+    Always returns at least [1]."""
+    nums = set()
+    for value in fields.values():
+        for m in re.finditer(r"\{\{c(\d+)::", value or ""):
+            nums.add(int(m.group(1)))
+    return sorted(nums) or [1]
+
+
+def strip_tags(text):
+    """Crude HTML tag strip, used only to test whether a rendered template
+    front is non-empty (i.e. whether Anki would generate that card)."""
+    return re.sub(r"<[^>]*>", "", text or "")
+
+
 def cloze_templates(field_order, cloze_name):
     """Fallback templates for a cloze note when Anki is closed."""
     rest = [f for f in field_order if f != cloze_name]

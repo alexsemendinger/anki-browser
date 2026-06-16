@@ -35,6 +35,76 @@ def test_approve_pushes_to_anki_and_undo(client):
     assert inbox.count(client.cfg["paths"]["inbox"]) == 1
 
 
+def test_cloze_per_card_approval_gates_send(client):
+    # a 2-cloze note -> two cards; the note must NOT reach Anki until both are approved
+    card = _seed_inbox(
+        client.cfg, note_type="Cloze", fields={"Text": "{{c1::a}} and {{c2::b}}"}
+    )
+    cid = card["id"]
+
+    r1 = client.post(f"/api/inbox/{cid}/approve", json={"ordinal": 1}).get_json()
+    assert r1["committed"] is False and r1["approved_cards"] == [1]
+    assert client.fake.notes == {}  # nothing sent yet
+    assert inbox.count(client.cfg["paths"]["inbox"]) == 1
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == [1]
+
+    r2 = client.post(f"/api/inbox/{cid}/approve", json={"ordinal": 2}).get_json()
+    assert r2["committed"] is True
+    assert r2["note_id"] in client.fake.notes  # whole note now sent
+    assert inbox.count(client.cfg["paths"]["inbox"]) == 0
+
+    # undo the commit -> note removed, file back with one card still pending
+    client.post("/api/undo")
+    assert r2["note_id"] not in client.fake.notes
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == [1]
+    # undo the first approval -> back to nothing approved
+    client.post("/api/undo")
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == []
+
+
+def test_template_note_per_card_approval_gates_send(client):
+    # a 2-template note (forward + reverse) -> two cards, both must be approved
+    card = _seed_inbox(
+        client.cfg, note_type="Basic (and reversed card)", fields={"Front": "F", "Back": "B"}
+    )
+    cid = card["id"]
+    listing = client.get("/api/inbox").get_json()
+    t = [c for c in listing["cards"] if c["card"]["id"] == cid][0]
+    assert [s["ordinal"] for s in t["rendered"]["cards"]] == [0, 1]
+
+    r1 = client.post(f"/api/inbox/{cid}/approve", json={"ordinal": 0}).get_json()
+    assert r1["committed"] is False and client.fake.notes == {}
+    r2 = client.post(f"/api/inbox/{cid}/approve", json={"ordinal": 1}).get_json()
+    assert r2["committed"] is True and r2["note_id"] in client.fake.notes
+
+
+def test_optional_reverse_card_count_follows_field(client):
+    # the reverse card only exists when its field is set
+    two = _seed_inbox(
+        client.cfg, note_type="Basic (optional reversed card)",
+        fields={"Front": "F", "Back": "B", "Add Reverse": "y"},
+    )
+    one = _seed_inbox(
+        client.cfg, note_type="Basic (optional reversed card)",
+        fields={"Front": "F", "Back": "B", "Add Reverse": ""},
+    )
+    listing = client.get("/api/inbox").get_json()["cards"]
+    by_id = {c["card"]["id"]: c for c in listing}
+    assert [s["ordinal"] for s in by_id[two["id"]]["rendered"]["cards"]] == [0, 1]
+    assert [s["ordinal"] for s in by_id[one["id"]]["rendered"]["cards"]] == [0]
+
+
+def test_inbox_edit_clears_approvals(client):
+    card = _seed_inbox(
+        client.cfg, note_type="Cloze", fields={"Text": "{{c1::a}} {{c2::b}}"}, approved_cards=[1]
+    )
+    cid = card["id"]
+    client.put(f"/api/inbox/{cid}", json={"fields": {"Text": "{{c1::x}} {{c2::y}}"}})
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == []
+    client.post("/api/undo")
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == [1]
+
+
 def test_delete_to_graveyard_and_undo(client):
     card = _seed_inbox(client.cfg)
     client.post(f"/api/inbox/{card['id']}/delete")

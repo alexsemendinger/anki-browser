@@ -1,7 +1,7 @@
 {
   "id": "sample-basic-001",
   "note_type": "Basic",
-  "deck": "Default",
+  "deck": "Z::Deletable",
   "fields": {
     "Front": "What does AnkiConnect listen on by default?",
     "Back": "<code>127.0.0.1:8765</code>"

@@ -12,6 +12,9 @@
 
 * { box-sizing: border-box; }
 
+/* the hidden attribute must win over .overlay/.surface display rules */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -96,6 +99,11 @@ body { display: flex; flex-direction: column; height: 100vh; }
   font-size: 18px;
 }
 
+.pips { display: inline-flex; gap: 5px; align-items: center; }
+.pip { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--muted); box-sizing: border-box; }
+.pip.ok { background: var(--green); border-color: var(--green); }
+.pip.cur { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .flagpill { padding: 2px 8px; border-radius: 10px; font-size: 11px; color: #111; }
 .flag-red { background: var(--red); }
 .flag-orange { background: var(--orange); }
@@ -106,8 +114,8 @@ body { display: flex; flex-direction: column; height: 100vh; }
   background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; font-size: 13px;
 }
 #survey-filters button { cursor: pointer; }
-#grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding: 14px; align-content: start; }
-.gridcard { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; height: 160px; }
+#grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 10px; padding: 14px; align-content: start; }
+.gridcard { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; height: 320px; }
 .gridcard.sel { outline: 2px solid var(--accent); }
 .gridcard iframe { width: 100%; height: 100%; border: 0; }
 

@@ -4,9 +4,9 @@ const state = {
   surface: "inbox",
   mode: "normal",
   config: null,
-  inbox: { cards: [], idx: 0, flipped: false },
+  inbox: { cards: [], idx: 0, ord: 0, flipped: false },
   repair: { cards: [], idx: 0, flipped: false },
-  survey: { cards: [], total: 0, offset: 0, limit: 20, sel: 0, flipAll: false, loading: false },
+  survey: { cards: [], total: 0, offset: 0, limit: 200, sel: 0, flipAll: false, loading: false },
   exemplarCtx: null,
   targetAnnounced: false,
 };
@@ -105,6 +105,7 @@ async function loadInbox() {
   const data = await api.get("/api/inbox");
   state.inbox.cards = data.cards;
   if (state.inbox.idx >= data.cards.length) state.inbox.idx = Math.max(0, data.cards.length - 1);
+  state.inbox.ord = 0;
   state.inbox.flipped = false;
   renderInbox();
   updateBadges();
@@ -122,14 +123,35 @@ function renderInbox() {
   $("inbox-empty").hidden = true;
   const item = cards[idx];
   const c = item.card;
+  const r = item.rendered;
+  // a note may generate several cards (cloze c1, c2, ...); page through them
+  const subcards = r.cards && r.cards.length ? r.cards : [{ ordinal: 1, question: r.question, answer: r.answer }];
+  if (state.inbox.ord >= subcards.length) state.inbox.ord = subcards.length - 1;
+  if (state.inbox.ord < 0) state.inbox.ord = 0;
+  const sub = subcards[state.inbox.ord];
+  const approvedSet = new Set(item.card.approved_cards || []);
+  const pips =
+    subcards.length > 1
+      ? '<span class="pips">' +
+        subcards
+          .map(
+            (sc, i) =>
+              `<span class="pip${approvedSet.has(sc.ordinal) ? " ok" : ""}${i === state.inbox.ord ? " cur" : ""}"></span>`
+          )
+          .join("") +
+        "</span>"
+      : "";
   $("inbox-meta").innerHTML =
     `<span>${idx + 1} / ${cards.length}</span>` +
     `<span>${c.note_type}</span><span>${c.deck}</span>` +
+    (subcards.length > 1
+      ? `<span>card ${state.inbox.ord + 1} / ${subcards.length}</span>${pips}` +
+        (sub.name ? `<span class="muted">${sub.name}</span>` : "")
+      : "") +
     `<span class="muted">${c.source}</span>` +
     (c.tags && c.tags.length ? `<span class="muted">${c.tags.join(" ")}</span>` : "") +
     `<span class="muted">${state.inbox.flipped ? "back" : "front"}</span>`;
-  const r = item.rendered;
-  frameInto($("inbox-frame"), state.inbox.flipped ? r.answer : r.question, r.css, true);
+  frameInto($("inbox-frame"), state.inbox.flipped ? sub.answer : sub.question, r.css, true);
   const ch = c.comment_history || [];
   $("inbox-comments").innerHTML = ch
     .map(
@@ -149,6 +171,37 @@ async function inboxAction(path) {
   }
   await loadInbox();
   await refreshSession();
+}
+
+// Approve the CURRENT card. The note is only sent to Anki once every card it
+// generates is approved; until then this just marks the card and moves on.
+async function approveCard() {
+  const item = state.inbox.cards[state.inbox.idx];
+  if (!item) return;
+  const r = item.rendered;
+  const subcards = r.cards && r.cards.length ? r.cards : [{ ordinal: 1 }];
+  const sub = subcards[state.inbox.ord] || subcards[0];
+  const res = await api.send(`/api/inbox/${item.card.id}/approve`, "POST", { ordinal: sub.ordinal });
+  if (!res.ok) {
+    toast(res.data.error || "failed");
+    return;
+  }
+  if (res.data.committed) {
+    toast("approved → deck");
+    await loadInbox();
+    await refreshSession();
+    return;
+  }
+  // partial: persist the approval and jump to the next still-pending card
+  item.card.approved_cards = res.data.approved_cards;
+  const approved = new Set(res.data.approved_cards);
+  for (let step = 1; step <= subcards.length; step++) {
+    const i = (state.inbox.ord + step) % subcards.length;
+    if (!approved.has(subcards[i].ordinal)) { state.inbox.ord = i; break; }
+  }
+  state.inbox.flipped = false;
+  renderInbox();
+  toast("card approved");
 }
 
 // --- repair ---------------------------------------------------------------
@@ -201,6 +254,13 @@ async function loadDecks() {
   sel.innerHTML = '<option value="">deck</option>' + data.decks.map((d) => `<option>${d}</option>`).join("");
 }
 
+function hasSurveyScope() {
+  return !!(
+    $("f-deck").value || $("f-tag").value || $("f-added").value ||
+    $("f-lapses").value || $("f-due").checked
+  );
+}
+
 function surveyQuery() {
   const p = new URLSearchParams();
   if ($("f-deck").value) p.set("deck", $("f-deck").value);
@@ -213,6 +273,9 @@ function surveyQuery() {
   return p.toString();
 }
 
+// Load the WHOLE selected scope (a deck can be hundreds of cards), one page at
+// a time. Cards are placed immediately as fixed-size placeholders and their
+// iframe is built lazily when scrolled near, so a big deck doesn't freeze.
 async function loadSurvey(reset) {
   if (state.survey.loading) return;
   state.survey.loading = true;
@@ -222,36 +285,69 @@ async function loadSurvey(reset) {
     state.survey.sel = 0;
     state.survey.flipAll = !!state.config.grid_show_backs;
     $("grid").innerHTML = "";
+    ensureGridObserver();
   }
-  const data = await api.get("/api/survey?" + surveyQuery());
-  state.survey.loading = false;
-  if (data.error) {
-    $("survey-count").textContent = "anki not reachable";
+  // avoid pulling the entire collection; scan is per-deck/filter
+  if (!hasSurveyScope()) {
+    $("survey-count").textContent = "select a deck";
+    state.survey.loading = false;
     return;
   }
-  state.survey.total = data.total;
-  state.survey.cards = state.survey.cards.concat(data.cards);
-  $("survey-count").textContent = `${state.survey.cards.length} / ${data.total}`;
-  renderGridAppend(data.cards);
+  while (true) {
+    const data = await api.get("/api/survey?" + surveyQuery());
+    if (data.error) {
+      $("survey-count").textContent = "anki not reachable";
+      break;
+    }
+    state.survey.total = data.total;
+    const start = state.survey.cards.length;
+    state.survey.cards = state.survey.cards.concat(data.cards);
+    renderGridAppend(data.cards, start);
+    $("survey-count").textContent = `${state.survey.cards.length} / ${data.total}`;
+    if (!data.cards.length || state.survey.cards.length >= data.total) break;
+    state.survey.offset += state.survey.limit;
+  }
+  state.survey.loading = false;
 }
 
-function renderGridAppend(cards) {
+let gridObserver = null;
+function ensureGridObserver() {
+  if (gridObserver) gridObserver.disconnect();
+  gridObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) {
+          renderGridCard(en.target);
+          gridObserver.unobserve(en.target);
+        }
+      });
+    },
+    { root: $("grid"), rootMargin: "400px" }
+  );
+}
+
+function renderGridCard(div) {
+  if (div.dataset.rendered) return;
+  const c = state.survey.cards[+div.dataset.index];
+  if (!c) return;
+  const back = c._flipped == null ? state.survey.flipAll : c._flipped;
+  const f = document.createElement("iframe");
+  f.setAttribute("sandbox", "allow-scripts");
+  f.srcdoc = cardDoc(back ? c.answer : c.question, c.css, state.config.grid_mathjax);
+  div.replaceChildren(f);
+  div.dataset.rendered = "1";
+}
+
+function renderGridAppend(cards, start) {
   const grid = $("grid");
-  cards.forEach((c) => {
+  cards.forEach((c, j) => {
     const div = document.createElement("div");
     div.className = "gridcard";
-    const f = document.createElement("iframe");
-    f.setAttribute("sandbox", "allow-scripts");
-    f.srcdoc = cardDoc(state.survey.flipAll ? c.answer : c.question, c.css, state.config.grid_mathjax);
-    div.appendChild(f);
+    div.dataset.index = start + j;
     grid.appendChild(div);
+    gridObserver.observe(div);
   });
   markSelection();
-}
-
-function renderGridFull() {
-  $("grid").innerHTML = "";
-  renderGridAppend(state.survey.cards);
 }
 
 function markSelection() {
@@ -260,16 +356,6 @@ function markSelection() {
   const cur = nodes[state.survey.sel];
   if (cur) cur.scrollIntoView({ block: "nearest" });
 }
-
-$("grid").addEventListener("scroll", () => {
-  const g = $("grid");
-  if (g.scrollTop + g.clientHeight > g.scrollHeight - 200) {
-    if (state.survey.cards.length < state.survey.total) {
-      state.survey.offset += state.survey.limit;
-      loadSurvey(false);
-    }
-  }
-});
 
 // --- stats ----------------------------------------------------------------
 async function loadStats() {
@@ -461,9 +547,10 @@ async function startSession() {
 // --- help -----------------------------------------------------------------
 const HELP = [
   ["1-4", "switch surface (inbox, repair, survey, stats)"],
-  ["j / k", "previous / next card"],
+  ["j / k", "move down / up"],
+  ["h / l", "move left / right"],
   ["space", "flip"],
-  ["a", "approve (inbox -> deck)"],
+  ["a", "approve card"],
   ["d", "delete (inbox -> graveyard)"],
   ["c", "comment + send back (inbox)"],
   ["e", "edit fields (inbox / repair)"],
@@ -474,8 +561,7 @@ const HELP = [
 ];
 function buildHelp() {
   $("help-body").innerHTML =
-    HELP.map(([k, v]) => `<div class="row"><span class="k"><code>${k}</code></span><span>${v}</span></div>`).join("") +
-    `<div class="row" style="margin-top:10px"><span class="muted">repair: save clears the native flag · survey: arrows move, space flips one, flip all button</span></div>`;
+    HELP.map(([k, v]) => `<div class="row"><span class="k"><code>${k}</code></span><span>${v}</span></div>`).join("");
 }
 function toggleHelp() {
   const h = $("help");
@@ -535,7 +621,7 @@ function onKey(e) {
   if (k === "4") return setSurface("stats");
   if (k === "?") return toggleHelp();
   if (k === "u") return doUndo();
-  if (k === "s") return openSession();
+  if (k === "s") { e.preventDefault(); return openSession(); }
   if (k === "g") return startExemplar();
 
   if (state.surface === "inbox") inboxKeys(k, e);
@@ -545,13 +631,15 @@ function onKey(e) {
 
 function inboxKeys(k, e) {
   const s = state.inbox;
-  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.flipped = false; renderInbox(); }
-  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.flipped = false; renderInbox(); }
+  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.ord = 0; s.flipped = false; renderInbox(); }
+  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.ord = 0; s.flipped = false; renderInbox(); }
+  else if (k === "l" || k === "ArrowRight") { s.ord += 1; s.flipped = false; renderInbox(); }
+  else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.flipped = false; renderInbox(); }
   else if (k === " ") { e.preventDefault(); s.flipped = !s.flipped; renderInbox(); }
-  else if (k === "a") inboxAction("approve");
+  else if (k === "a") approveCard();
   else if (k === "d") inboxAction("delete");
-  else if (k === "c") openCommenter();
-  else if (k === "e") openEditor();
+  else if (k === "c") { e.preventDefault(); openCommenter(); }
+  else if (k === "e") { e.preventDefault(); openEditor(); }
 }
 
 function repairKeys(k, e) {
@@ -559,12 +647,12 @@ function repairKeys(k, e) {
   if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.flipped = false; renderRepair(); }
   else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.flipped = false; renderRepair(); }
   else if (k === " ") { e.preventDefault(); s.flipped = !s.flipped; renderRepair(); }
-  else if (k === "e") openEditor();
+  else if (k === "e") { e.preventDefault(); openEditor(); }
 }
 
 function surveyKeys(k, e) {
   const s = state.survey;
-  const cols = Math.max(1, Math.floor($("grid").clientWidth / 230));
+  const cols = Math.max(1, Math.floor($("grid").clientWidth / 450));
   if (k === "j" || k === "ArrowDown") s.sel = Math.min(s.sel + cols, s.cards.length - 1);
   else if (k === "k" || k === "ArrowUp") s.sel = Math.max(s.sel - cols, 0);
   else if (k === "h" || k === "ArrowLeft") s.sel = Math.max(s.sel - 1, 0);
@@ -578,16 +666,19 @@ function surveyKeys(k, e) {
 function flipOne(i) {
   const c = state.survey.cards[i];
   if (!c) return;
-  c._flipped = !c._flipped;
-  const node = $("grid").querySelectorAll(".gridcard")[i];
-  const f = node.querySelector("iframe");
-  f.srcdoc = cardDoc(c._flipped ? c.answer : c.question, c.css, state.config.grid_mathjax);
+  const back = c._flipped == null ? state.survey.flipAll : c._flipped;
+  c._flipped = !back;
+  const div = $("grid").querySelectorAll(".gridcard")[i];
+  if (div) { div.dataset.rendered = ""; renderGridCard(div); }
 }
 
 function toggleFlipAll() {
   state.survey.flipAll = !state.survey.flipAll;
   state.survey.cards.forEach((c) => (c._flipped = state.survey.flipAll));
-  renderGridFull();
+  // re-render only cards already built; unbuilt ones pick up flipAll when shown
+  $("grid").querySelectorAll(".gridcard").forEach((div) => {
+    if (div.dataset.rendered) { div.dataset.rendered = ""; renderGridCard(div); }
+  });
 }
 
 // --- util -----------------------------------------------------------------

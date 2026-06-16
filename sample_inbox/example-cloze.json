@@ -1,10 +1,10 @@
 {
   "id": "sample-cloze-003",
   "note_type": "Cloze",
-  "deck": "Default",
+  "deck": "Z::Deletable",
   "fields": {
     "Text": "The capital of {{c1::France}} is {{c2::Paris}}.",
-    "Back Extra": "Western Europe."
+    "Extra": "Western Europe."
   },
   "tags": ["sample", "ai", "geo"],
   "source": "ai",

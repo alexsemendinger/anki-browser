@@ -38,24 +38,70 @@ class CardRenderer:
         model_name = card.get("note_type", "Basic")
         templates, css, field_order = self._model(model_name)
         field_order = field_order or list(fields.keys())
-
-        if templates:
-            first = next(iter(templates.values()))
-            qfmt = first.get("Front", "")
-            afmt = first.get("Back", "")
-        else:
-            cloze_name = rendering.cloze_field_name(fields)
-            if cloze_name:
-                qfmt, afmt = rendering.cloze_templates(field_order, cloze_name)
-            else:
-                qfmt, afmt = rendering.basic_templates(field_order)
         if not css:
             css = rendering.DEFAULT_CSS
 
-        rendered = rendering.render(fields, qfmt, afmt)
-        rendered["css"] = css
-        rendered["field_order"] = field_order
-        return rendered
+        # Enumerate EVERY card the note will generate so the inbox can page
+        # through and approve each one. addNote is atomic, so the note is only
+        # sent once all its cards are approved. Cloze -> one card per ordinal;
+        # any other note type -> one card per template that generates.
+        if rendering.cloze_field_name(fields):
+            cards = self._cloze_cards(fields, field_order, templates)
+        else:
+            cards = self._template_cards(fields, field_order, templates)
+
+        return {
+            "question": cards[0]["question"],
+            "answer": cards[0]["answer"],
+            "cards": cards,
+            "css": css,
+            "field_order": field_order,
+        }
+
+    def _cloze_cards(self, fields, field_order, templates):
+        """One card per cloze ordinal (c1, c2, ...); ordinal = the cloze number."""
+        qfmt = afmt = None
+        if templates:
+            first = next(iter(templates.values()))
+            if "{{cloze:" in (first.get("Front", "") or ""):
+                qfmt, afmt = first.get("Front", ""), first.get("Back", "")
+        if qfmt is None:  # Anki closed or non-cloze template: synthesize one
+            cloze_name = rendering.cloze_field_name(fields)
+            qfmt, afmt = rendering.cloze_templates(field_order, cloze_name)
+        cards = []
+        for ordinal in rendering.cloze_ordinals(fields):
+            r = rendering.render(fields, qfmt, afmt, ordinal=ordinal)
+            cards.append(
+                {"ordinal": ordinal, "name": "cloze %d" % ordinal,
+                 "question": r["question"], "answer": r["answer"]}
+            )
+        return cards
+
+    def _template_cards(self, fields, field_order, templates):
+        """One card per card template that actually generates for these fields.
+        A template whose front renders empty (e.g. an optional reverse with its
+        field unset) produces no card, matching Anki. Ordinal = template index,
+        which is Anki's card ord."""
+        items = list(templates.items()) if templates else []
+        if not items:  # Anki closed: fall back to a single basic template
+            qfmt, afmt = rendering.basic_templates(field_order)
+            items = [("Card 1", {"Front": qfmt, "Back": afmt})]
+        cards = []
+        for ordinal, (name, tmpl) in enumerate(items):
+            r = rendering.render(fields, tmpl.get("Front", ""), tmpl.get("Back", ""))
+            if not rendering.strip_tags(r["question"]).strip():
+                continue  # empty front -> Anki generates no card for this template
+            cards.append(
+                {"ordinal": ordinal, "name": name,
+                 "question": r["question"], "answer": r["answer"]}
+            )
+        if not cards:  # every template empty: still show one so the inbox isn't blank
+            name, tmpl = items[0]
+            r = rendering.render(fields, tmpl.get("Front", ""), tmpl.get("Back", ""))
+            cards.append(
+                {"ordinal": 0, "name": name, "question": r["question"], "answer": r["answer"]}
+            )
+        return cards
 
     @staticmethod
     def from_card_info(info):
