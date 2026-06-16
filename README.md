@@ -8,6 +8,11 @@ per-card judgment fast and pleasant so only good cards make it in.
 AnkiConnect is the only write path to your live deck. Provisional cards live as
 plain files until you approve them. Nothing is hard-deleted.
 
+Docs: `docs/SPEC.md` (original build spec, source of truth for intent) and
+`docs/DESIGN_NOTES.md` (design rationale, nonobvious choices, known risks,
+verification status, next steps). Read `DESIGN_NOTES.md` before changing the
+Anki write path.
+
 ## Requirements
 
 - Python 3.11+
