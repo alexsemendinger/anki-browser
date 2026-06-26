@@ -25,10 +25,25 @@ The inbox surface works without Anki. Approve, repair, and survey need Anki open
 ## Run
 
 ```
-python -m venv .venv && . .venv/bin/activate
+./start.sh
+```
+
+That's it. The first run sets up a hidden virtualenv and installs dependencies;
+every run after just starts the server and opens http://127.0.0.1:5151 in your
+browser. Press Ctrl+C to stop. On macOS you can also double-click
+**`Anki Workbench.command`** in Finder (or keep it in the Dock).
+
+You never activate or manage a venv. If you ever want a clean slate, delete the
+`.venv` folder and run `./start.sh` again.
+
+<details><summary>Manual / no-script alternative</summary>
+
+```
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python run.py            # then open http://127.0.0.1:5151
 ```
+</details>
 
 Optional: copy `config.example.json` to `config.json` and edit it.
 
