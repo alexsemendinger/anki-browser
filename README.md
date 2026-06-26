@@ -149,9 +149,25 @@ Validation **errors** (unknown note type, unknown field) block the write;
 
 **For a Claude Code instance:** generate your notes, then for each call
 `./add-card --json -` with the card JSON on stdin. Match `note_type` to a real
-Anki model and use that model's exact field names. After a card is sent back with
-a comment it lands in that file's `comment_history` — read it, revise, and write
-the same `id` to update the card in place.
+Anki model and use that model's exact field names (see the schema reference
+below). After a card is sent back with a comment it lands in that file's
+`comment_history` — read it, revise, and write the same `id` to update the card
+in place.
+
+## Note type / field reference
+
+Every time the app is opened it snapshots your collection's schema to:
+
+- `data/note_types.json` — `{ "models": { "Basic": ["Front","Back"], ... },
+  "decks": [...] }`, for programmatic use
+- `data/note_types.md` — the same, human-readable
+
+This is the authoritative list of note types, their exact field names, and your
+real deck names — read `data/note_types.json` before generating cards. It's also
+available live at `GET /api/models` (which regenerates the files), and
+`add-card` validates against the same data. Cheap to produce (one `modelNames`
+call plus one `modelFieldNames` per model), so it always reflects the current
+collection.
 
 ## Data
 

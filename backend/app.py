@@ -16,6 +16,7 @@ from . import (
     exemplars,
     graveyard,
     inbox,
+    models,
     stats,
 )
 from .ankiconnect import AnkiConnect, AnkiConnectError, AnkiUnavailable
@@ -293,6 +294,15 @@ def create_app(cfg=None):
             return jsonify({"decks": sorted(anki.deck_names())})
         except AnkiConnectError:
             return jsonify({"decks": []})
+
+    @app.get("/api/models")
+    def models_list():
+        """Every note type with its field names, plus decks. Also (re)writes
+        data/note_types.{json,md} so a generator has the schema on disk."""
+        snap = models.write_snapshot(anki, paths["data"])
+        if snap is None:
+            return jsonify({"error": "anki unavailable", "models": {}, "decks": []})
+        return jsonify(snap)
 
     # --- exemplar archive ------------------------------------------------
     @app.post("/api/exemplar")

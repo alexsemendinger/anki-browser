@@ -190,6 +190,17 @@ def test_session_target(client):
     assert s["count"] == 1 and s["target_hit"] is False
 
 
+def test_models_endpoint_lists_types_and_writes_snapshot(client):
+    import os
+    data = client.get("/api/models").get_json()
+    assert data["models"]["Basic"] == ["Front", "Back"]
+    assert data["models"]["Cloze"] == ["Text", "Extra"]
+    assert "Default" in data["decks"]
+    data_dir = client.cfg["paths"]["data"]
+    assert os.path.exists(os.path.join(data_dir, "note_types.json"))
+    assert os.path.exists(os.path.join(data_dir, "note_types.md"))
+
+
 def test_survey_query(client):
     fake = client.fake
     fake.cards[1] = {"note_id": 1, "flag": 0, "model": "Basic", "deck": "Default", "fields": {"Front": {"value": "x", "order": 0}}}

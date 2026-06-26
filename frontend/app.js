@@ -705,6 +705,7 @@ async function boot() {
   setInterval(pollStatus, 15000);
   await refreshSession();
   await loadDecks();
+  api.get("/api/models").catch(() => {}); // refresh data/note_types.* for generators
   setSurface("inbox");
 }
 boot();
