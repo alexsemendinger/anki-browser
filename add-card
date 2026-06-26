@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Thin wrapper so you don't have to think about the venv: runs add_card.py with
+# the project's hidden interpreter. See `./add-card --help`.
+cd "$(dirname "$0")"
+PY=".venv/bin/python"
+[ -x "$PY" ] || PY="python3"
+exec "$PY" add_card.py "$@"

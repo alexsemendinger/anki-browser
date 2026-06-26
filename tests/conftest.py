@@ -69,6 +69,9 @@ class FakeAnki:
     def deck_names(self):
         return ["Default"]
 
+    def model_names(self):
+        return ["Basic", "Cloze", "Basic (and reversed card)", "Basic (optional reversed card)"]
+
     def model_templates(self, model):
         if model == "Basic (and reversed card)":
             return {
@@ -86,6 +89,8 @@ class FakeAnki:
         return {"css": ".card{color:red}"}
 
     def model_field_names(self, model):
+        if model == "Cloze":
+            return ["Text", "Extra"]
         return ["Front", "Back"]
 
 

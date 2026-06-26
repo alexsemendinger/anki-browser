@@ -86,25 +86,72 @@ flips the grid (defaults to backs).
 
 ## Inbox file format
 
-One card per JSON file in `data/inbox/`. The filename stem is the card's id, so
-a generator can write `data/inbox/whatever.json` and the tool addresses it as
-`whatever`. This is the clean target for v2 AI generation.
+One card per JSON file in `data/inbox/`. **The filename stem is the card's id**,
+so a generator can write `data/inbox/whatever.json` and the tool addresses it as
+`whatever` (any internal `"id"` field is ignored for addressing). The directory
+is read live, so a new file appears the next time the inbox loads — no restart.
 
 ```json
 {
   "note_type": "Basic",
-  "deck": "Default",
+  "deck": "Biology",
   "fields": { "Front": "...", "Back": "..." },
   "tags": ["ai"],
   "source": "ai",
+  "created": "<iso8601>",
   "comment_history": [
     { "date": "<iso8601>", "author": "me", "text": "too vague, add an example" }
-  ]
+  ],
+  "approved_cards": []
 }
 ```
 
-Comments accumulate in `comment_history` so a downstream regenerating agent sees
-the whole conversation, not just the latest state.
+Only `fields` is strictly required; everything else has a default (`note_type` →
+`Basic`, `deck` → config `default_deck`, the rest empty). Two things that bite:
+
+- **`deck` must be a real deck** in your collection, or approving creates a stray one.
+- **Field names must match the note type exactly** (`Basic` → `Front`/`Back`,
+  `Cloze` → `Text`/`Extra`); unknown fields are silently dropped on approve.
+
+`comment_history` accumulates send-back comments so a regenerating agent sees the
+whole conversation, not just the latest state. `approved_cards` holds the per-card
+approvals (cloze ordinals / template indices) and is managed by the app — a
+generator should leave it out (it defaults to `[]`).
+
+## Adding cards (the `add-card` helper)
+
+Writing that JSON by hand is no fun and it's easy to get a field name wrong.
+`./add-card` builds a well-formed file for you and validates the note type, field
+names, and deck against your **running Anki** first, so mistakes are caught before
+they reach the inbox. It writes files directly (the workbench server need not be
+running) and is the intended entry point for scripted / AI card creation.
+
+```
+# one Basic card from flags
+./add-card -t Basic -d "Biology" \
+    -f Front="Where does photosynthesis occur?" -f Back="Chloroplasts" --tag ai
+
+# a card (or a JSON array of cards) on stdin -- the programmatic path
+echo '{"note_type":"Cloze","deck":"Biology",
+       "fields":{"Text":"ATP is made in the {{c1::mitochondria}}."}}' \
+    | ./add-card --json -
+
+# stable id so re-running updates the same inbox file (the revision loop)
+./add-card --id photosynthesis-1 -t Basic -d Biology -f Front="..." -f Back="..."
+
+# Anki closed? skip validation (you lose the safety check)
+./add-card --no-validate -t Basic -d Biology -f Front=Q -f Back=A
+```
+
+Validation **errors** (unknown note type, unknown field) block the write;
+**warnings** (deck doesn't exist yet, empty first field, cloze with no
+`{{c1::...}}` markers) are printed but don't. See `./add-card --help` for all flags.
+
+**For a Claude Code instance:** generate your notes, then for each call
+`./add-card --json -` with the card JSON on stdin. Match `note_type` to a real
+Anki model and use that model's exact field names. After a card is sent back with
+a comment it lands in that file's `comment_history` — read it, revise, and write
+the same `id` to update the card in place.
 
 ## Data
 
