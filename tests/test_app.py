@@ -1,4 +1,13 @@
+import pytest
+
 from backend import inbox
+from backend.ankiconnect import AnkiConnectError, AnkiUnavailable
+
+
+def _raiser(exc):
+    def f(*a, **k):
+        raise exc
+    return f
 
 
 def _seed_inbox(cfg, **over):
@@ -207,3 +216,130 @@ def test_survey_query(client):
     data = client.get("/api/survey?deck=Default&limit=10").get_json()
     assert data["total"] == 1
     assert data["cards"][0]["deck"] == "Default"
+
+
+# --- error / edge branches ------------------------------------------------
+
+def test_status_reports_anki_down(client):
+    client.fake.invoke = _raiser(AnkiConnectError("down"))
+    assert client.get("/api/status").get_json() == {"anki": False, "version": None}
+
+
+def test_approve_anki_unavailable_503_keeps_card(client):
+    card = _seed_inbox(client.cfg)
+    client.fake.add_note = _raiser(AnkiUnavailable("down"))
+    res = client.post(f"/api/inbox/{card['id']}/approve")
+    assert res.status_code == 503
+    assert inbox.count(client.cfg["paths"]["inbox"]) == 1  # not lost
+
+
+def test_approve_duplicate_409_keeps_card(client):
+    card = _seed_inbox(client.cfg)
+    client.fake.add_note = _raiser(AnkiConnectError("cannot create note because it is a duplicate"))
+    res = client.post(f"/api/inbox/{card['id']}/approve")
+    assert res.status_code == 409
+    assert inbox.count(client.cfg["paths"]["inbox"]) == 1
+
+
+def test_approve_unknown_ordinal_400(client):
+    card = _seed_inbox(client.cfg, note_type="Cloze", fields={"Text": "{{c1::a}} {{c2::b}}"})
+    res = client.post(f"/api/inbox/{card['id']}/approve", json={"ordinal": 99})
+    assert res.status_code == 400
+    assert client.fake.notes == {}  # nothing sent
+
+
+def test_inbox_actions_missing_card_404(client):
+    assert client.post("/api/inbox/nope/approve").status_code == 404
+    assert client.post("/api/inbox/nope/delete").status_code == 404
+    assert client.post("/api/inbox/nope/comment", json={"text": "x"}).status_code == 404
+    assert client.put("/api/inbox/nope", json={"fields": {}}).status_code == 404
+
+
+def test_undo_with_empty_stack(client):
+    assert client.post("/api/undo").get_json()["undone"] is None
+
+
+def test_exemplar_rejects_bad_verdict(client):
+    assert client.post("/api/exemplar", json={"verdict": "meh"}).status_code == 400
+
+
+def test_repair_anki_unavailable_503(client):
+    client.fake.find_cards = _raiser(AnkiUnavailable("down"))
+    res = client.get("/api/repair")
+    assert res.status_code == 503
+
+
+def test_repair_save_reports_flag_not_cleared(client):
+    fake = client.fake
+    fake.notes[5001] = {"fields": {"Front": "old", "Back": "b"}, "model": "Basic", "deck": "Default"}
+    fake.cards[9001] = {"note_id": 5001, "flag": 1, "model": "Basic", "deck": "Default",
+                        "fields": {"Front": {"value": "old", "order": 0}, "Back": {"value": "b", "order": 1}}}
+    fake.set_flag = _raiser(AnkiConnectError("no setFlag support"))
+    res = client.put("/api/repair/5001", json={"fields": {"Front": "new", "Back": "b"}, "card_id": 9001})
+    body = res.get_json()
+    assert body["ok"] is True and body["flag_cleared"] is False  # save succeeds, flag stays
+    assert fake.notes[5001]["fields"]["Front"] == "new"
+
+
+def test_survey_builds_query_from_filters(client):
+    captured = {}
+
+    def cap(q):
+        captured["q"] = q
+        return []
+
+    client.fake.find_cards = cap
+    client.get("/api/survey?deck=MyDeck&tag=foo&due=1&lapses=3&added=7")
+    q = captured["q"]
+    for part in ('deck:"MyDeck"', "tag:foo", "is:due", "prop:lapses>=3", "added:7"):
+        assert part in q
+
+
+def test_models_endpoint_anki_down(client):
+    client.fake.model_names = _raiser(AnkiConnectError("down"))
+    data = client.get("/api/models").get_json()
+    assert data["error"] == "anki unavailable" and data["models"] == {}
+
+
+def test_beeminder_push_endpoint_disabled(client):
+    out = client.post("/api/beeminder/push").get_json()
+    assert out == {"pushed": False, "reason": "disabled"}
+
+
+def test_session_start_stop(client):
+    client.post("/api/session/start", json={"target": 3})
+    s = client.get("/api/session").get_json()
+    assert s["active"] is True and s["target"] == 3
+    stopped = client.post("/api/session/stop").get_json()
+    assert stopped["session"]["active"] is False
+
+
+def test_survey_anki_unavailable_503(client):
+    client.fake.find_cards = _raiser(AnkiUnavailable("down"))
+    assert client.get("/api/survey?deck=X").status_code == 503
+
+
+def test_each_action_beeminder_push(client, monkeypatch):
+    from backend import beeminder
+    calls = []
+    monkeypatch.setattr(beeminder, "push_today", lambda cfg, value: calls.append(value) or {"pushed": True})
+    client.cfg["beeminder"].update(enabled=True, username="u", auth_token="t", goal="g", push_on="each_action")
+    card = _seed_inbox(client.cfg)
+    client.post(f"/api/inbox/{card['id']}/approve")
+    assert calls == [1]
+
+
+def test_session_stop_pushes_on_session_end(client, monkeypatch):
+    from backend import beeminder
+    calls = {}
+
+    def fake_push(cfg, value):
+        calls["value"] = value
+        return {"pushed": True, "value": value}
+
+    monkeypatch.setattr(beeminder, "push_today", fake_push)
+    client.cfg["beeminder"].update(enabled=True, username="u", auth_token="t", goal="g", push_on="session_end")
+    card = _seed_inbox(client.cfg)
+    client.post(f"/api/inbox/{card['id']}/approve")
+    out = client.post("/api/session/stop").get_json()
+    assert out["beeminder"]["pushed"] is True and calls["value"] == 1

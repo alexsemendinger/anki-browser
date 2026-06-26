@@ -117,6 +117,8 @@ def create_app(cfg=None):
             pending = [o for o in ordinals if o not in approved]
             ordinal = pending[0] if pending else ordinals[-1]
         ordinal = int(ordinal)
+        if ordinal not in ordinals:
+            return jsonify({"error": "unknown card ordinal", "ordinals": ordinals}), 400
         new_approved = sorted(set(approved) | {ordinal})
 
         if set(new_approved) < set(ordinals):

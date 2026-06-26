@@ -3,3 +3,4 @@ requests>=2.31
 
 # tests
 pytest>=8
+pytest-cov>=5
