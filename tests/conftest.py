@@ -72,6 +72,9 @@ class FakeAnki:
     def model_names(self):
         return ["Basic", "Cloze", "Basic (and reversed card)", "Basic (optional reversed card)"]
 
+    def retrieve_media_file(self, filename):
+        return False
+
     def model_templates(self, model):
         if model == "Basic (and reversed card)":
             return {

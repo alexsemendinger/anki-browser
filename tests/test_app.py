@@ -343,3 +343,16 @@ def test_session_stop_pushes_on_session_end(client, monkeypatch):
     client.post(f"/api/inbox/{card['id']}/approve")
     out = client.post("/api/session/stop").get_json()
     assert out["beeminder"]["pushed"] is True and calls["value"] == 1
+
+
+def test_graveyard_list_and_restore(client):
+    card = _seed_inbox(client.cfg)
+    client.post(f"/api/inbox/{card['id']}/delete")
+    assert client.get("/api/graveyard").get_json()["count"] == 1
+    res = client.post(f"/api/graveyard/{card['id']}/restore").get_json()
+    assert res["ok"] is True and res["remaining"] == 0
+    assert inbox.count(client.cfg["paths"]["inbox"]) == 1
+
+
+def test_graveyard_restore_missing_404(client):
+    assert client.post("/api/graveyard/nope/restore").status_code == 404

@@ -77,6 +77,7 @@ function setSurface(name) {
   if (name === "repair") loadRepair();
   if (name === "survey") loadSurvey(true);
   if (name === "stats") loadStats();
+  if (name === "graveyard") loadGraveyard();
 }
 
 function updateBadges() {
@@ -395,6 +396,45 @@ async function loadStats() {
     .join("");
 }
 
+// --- graveyard ------------------------------------------------------------
+async function loadGraveyard() {
+  const data = await api.get("/api/graveyard");
+  $("graveyard-badge").textContent = data.count || "";
+  const list = $("graveyard-list");
+  if (!data.cards.length) {
+    list.innerHTML = '<div class="empty">graveyard empty</div>';
+    return;
+  }
+  list.innerHTML = data.cards
+    .map((e) => {
+      const c = e.card || {};
+      const first = Object.values(c.fields || {})[0] || "";
+      const snip = escapeHtml(stripTags(first)).slice(0, 120);
+      const when = (e.buried || "").slice(0, 16).replace("T", " ");
+      return (
+        `<div class="gravecard">` +
+        `<div class="grave-meta"><span>${when}</span><span>${escapeHtml(c.note_type || "")}</span><span>${escapeHtml(c.deck || "")}</span></div>` +
+        `<div class="grave-text">${snip}</div>` +
+        `<button class="restore" data-id="${escapeHtml(c.id || "")}">restore</button>` +
+        `</div>`
+      );
+    })
+    .join("");
+}
+
+$("graveyard-list").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".restore");
+  if (!btn) return;
+  const res = await api.send(`/api/graveyard/${encodeURIComponent(btn.dataset.id)}/restore`, "POST", {});
+  if (res.ok) {
+    toast("restored → inbox", "info");
+    await loadGraveyard();
+    await loadInbox(); // refresh inbox count/badge
+  } else {
+    toast(res.data.error || "failed");
+  }
+});
+
 // --- exemplar -------------------------------------------------------------
 function startExemplar() {
   let ctx = null;
@@ -534,11 +574,11 @@ async function submitComment() {
     $("comment-text").value = text;
     return;
   }
-  // sent back: keep moving past it
-  state.inbox.idx = Math.min(state.inbox.idx + 1, state.inbox.cards.length - 1);
+  // sent back: it sinks to the bottom of the queue, so the next card slides
+  // into this slot -- keep idx where it is.
   await loadInbox();
   await refreshSession();
-  toast("sent back", "info");
+  toast("sent back → bottom", "info");
 }
 
 function openSession() {
@@ -557,7 +597,7 @@ async function startSession() {
 
 // --- help -----------------------------------------------------------------
 const HELP = [
-  ["1-4", "switch surface (inbox, repair, survey, stats)"],
+  ["1-5", "inbox · repair · survey · stats · graveyard"],
   ["j / k", "move down / up"],
   ["h / l", "move left / right"],
   ["space", "flip"],
@@ -630,6 +670,7 @@ function onKey(e) {
   if (k === "2") return setSurface("repair");
   if (k === "3") return setSurface("survey");
   if (k === "4") return setSurface("stats");
+  if (k === "5") return setSurface("graveyard");
   if (k === "?") return toggleHelp();
   if (k === "u") return doUndo();
   if (k === "s") { e.preventDefault(); return openSession(); }

@@ -72,6 +72,10 @@ class AnkiConnect:
     def model_field_names(self, model_name):
         return self.invoke("modelFieldNames", modelName=model_name)
 
+    def retrieve_media_file(self, filename):
+        """Base64 of a file in the collection.media folder, or False if absent."""
+        return self.invoke("retrieveMediaFile", filename=filename)
+
     # --- writing --------------------------------------------------------
     def add_note(self, deck, model, fields, tags=None, allow_duplicate=False):
         note = {

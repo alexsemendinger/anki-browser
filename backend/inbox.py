@@ -48,6 +48,16 @@ def _normalize(card, card_id):
     return card
 
 
+def _last_activity(card):
+    """Sort key for the review queue: the newest of `created` and any comment
+    date. A just-sent-back card (fresh comment) therefore sinks to the bottom,
+    so you don't immediately re-review the card you just commented on."""
+    ts = card.get("created", "")
+    for c in card.get("comment_history", []):
+        ts = max(ts, c.get("date", ""))
+    return ts
+
+
 def list_cards(inbox_dir):
     cards = []
     for name in os.listdir(inbox_dir):
@@ -58,7 +68,7 @@ def list_cards(inbox_dir):
                 cards.append(_normalize(json.load(fh), name[:-5]))
         except (json.JSONDecodeError, OSError):
             continue
-    cards.sort(key=lambda c: c.get("created", ""))
+    cards.sort(key=_last_activity)
     return cards
 
 

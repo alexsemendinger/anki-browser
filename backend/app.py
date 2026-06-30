@@ -217,7 +217,7 @@ def create_app(cfg=None):
             infos = anki.cards_info(card_ids)
         except AnkiUnavailable as exc:
             return jsonify({"error": "anki unavailable", "detail": str(exc)}), 503
-        cards = [CardRenderer.from_card_info(i) for i in infos]
+        cards = [renderer.shape_live(i) for i in infos]
         cards.sort(key=lambda c: (c["flag"] != 1, c["flag"]))  # red first
         return jsonify({"cards": cards, "count": len(cards)})
 
@@ -285,7 +285,7 @@ def create_app(cfg=None):
             infos = anki.cards_info(page)
         except AnkiUnavailable as exc:
             return jsonify({"error": "anki unavailable", "detail": str(exc)}), 503
-        cards = [CardRenderer.from_card_info(i) for i in infos]
+        cards = [renderer.shape_live(i) for i in infos]
         return jsonify(
             {"cards": cards, "total": len(card_ids), "offset": offset, "limit": limit}
         )
@@ -305,6 +305,20 @@ def create_app(cfg=None):
         if snap is None:
             return jsonify({"error": "anki unavailable", "models": {}, "decks": []})
         return jsonify(snap)
+
+    # --- graveyard -------------------------------------------------------
+    @app.get("/api/graveyard")
+    def graveyard_list():
+        rows = graveyard.list_buried(paths["graveyard"])
+        return jsonify({"cards": rows, "count": len(rows)})
+
+    @app.post("/api/graveyard/<card_id>/restore")
+    def graveyard_restore(card_id):
+        card = graveyard.exhume(paths["graveyard"], card_id)
+        if card is None:
+            return jsonify({"error": "not found"}), 404
+        inbox.save_card(paths["inbox"], card)
+        return jsonify({"ok": True, "remaining": len(graveyard.list_buried(paths["graveyard"]))})
 
     # --- exemplar archive ------------------------------------------------
     @app.post("/api/exemplar")

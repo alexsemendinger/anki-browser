@@ -145,3 +145,12 @@ def test_stats_pop_last_removes_top(cfg):
     stats.record(f, "delete")
     assert stats.pop_last(f)["type"] == "delete"
     assert [r["type"] for r in stats._read(f)] == ["approve"]
+
+
+def test_inbox_sends_commented_card_to_bottom(cfg):
+    d = cfg["paths"]["inbox"]
+    inbox.save_card(d, {"id": "a", "fields": {}, "created": "2026-01-01T00:00:00+00:00"})
+    inbox.save_card(d, {"id": "b", "fields": {}, "created": "2026-01-02T00:00:00+00:00"})
+    assert [c["id"] for c in inbox.list_cards(d)] == ["a", "b"]
+    inbox.add_comment(d, "a", "needs work")  # comment dated "now" -> a sinks
+    assert [c["id"] for c in inbox.list_cards(d)] == ["b", "a"]

@@ -83,3 +83,37 @@ def test_all_templates_empty_still_shows_one():
         {"note_type": "X", "fields": {"Front": "", "Back": "B"}}
     )
     assert len(out["cards"]) == 1  # safety: inbox is never blank
+
+
+class MediaAnki(TemplateAnki):
+    def retrieve_media_file(self, name):
+        return "QUJD" if name == "pic.png" else False  # "QUJD" == base64("ABC")
+
+
+def test_inline_media_replaces_img_with_data_uri():
+    r = CardRenderer(MediaAnki({}, []), {})
+    out = r.inline_media('<img src="pic.png"> x <img src="missing.png">')
+    assert 'src="data:image/png;base64,QUJD"' in out
+    assert 'src="missing.png"' in out  # absent media left untouched
+
+
+def test_inline_media_leaves_remote_and_data_srcs():
+    r = CardRenderer(MediaAnki({}, []), {})
+    html = '<img src="https://x/y.png"><img src="data:image/png;base64,Z">'
+    assert r.inline_media(html) == html
+
+
+def test_inline_media_url_decodes_filename():
+    class A(TemplateAnki):
+        def retrieve_media_file(self, name):
+            return "QUJD" if name == "a b.png" else False
+    r = CardRenderer(A({}, []), {})
+    assert "data:image/png;base64,QUJD" in r.inline_media('<img src="a%20b.png">')
+
+
+def test_shape_live_inlines_media():
+    info = {"cardId": 1, "note": 2, "modelName": "Basic", "deckName": "D", "flags": 0,
+            "fields": {"Front": {"value": "x", "order": 0}},
+            "question": '<img src="pic.png">', "answer": "A", "css": ""}
+    out = CardRenderer(MediaAnki({}, []), {}).shape_live(info)
+    assert "data:image/png;base64,QUJD" in out["question"]

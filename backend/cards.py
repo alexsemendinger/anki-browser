@@ -8,8 +8,17 @@ ourselves. If Anki is running we borrow the real note type's template and css so
 it looks like the real thing; if Anki is closed we fall back to a plain
 front/back render so the inbox still works offline.
 """
+import re
+from urllib.parse import unquote
+
 from . import rendering
 from .ankiconnect import AnkiConnectError
+
+_IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\bsrc=")([^"]+)(")', re.I)
+_MEDIA_MIME = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+    "svg": "image/svg+xml", "webp": "image/webp", "bmp": "image/bmp", "ico": "image/x-icon",
+}
 
 
 class CardRenderer:
@@ -17,6 +26,46 @@ class CardRenderer:
         self.anki = anki
         self.cfg = cfg
         self._model_cache = {}
+        self._media_cache = {}
+
+    # --- media -----------------------------------------------------------
+    def inline_media(self, html):
+        """Replace <img src="file.png"> with a data: URI fetched from Anki's
+        media folder, so images render in our sandboxed iframe without copying
+        or syncing any files. Already-inlined / remote srcs are left alone."""
+        if not html or "<img" not in html.lower():
+            return html
+
+        def repl(m):
+            src = m.group(2)
+            if src.startswith(("data:", "http:", "https:", "//")):
+                return m.group(0)
+            uri = self._media_data_uri(unquote(src))
+            return m.group(1) + (uri or src) + m.group(3)
+
+        return _IMG_SRC_RE.sub(repl, html)
+
+    def _media_data_uri(self, filename):
+        if filename in self._media_cache:
+            return self._media_cache[filename]
+        uri = None
+        try:
+            b64 = self.anki.retrieve_media_file(filename)
+            if b64:
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                mime = _MEDIA_MIME.get(ext, "application/octet-stream")
+                uri = "data:%s;base64,%s" % (mime, b64)
+        except AnkiConnectError:
+            uri = None
+        self._media_cache[filename] = uri
+        return uri
+
+    def shape_live(self, info):
+        """from_card_info plus media inlining, for live deck cards."""
+        shaped = self.from_card_info(info)
+        shaped["question"] = self.inline_media(shaped["question"])
+        shaped["answer"] = self.inline_media(shaped["answer"])
+        return shaped
 
     def _model(self, model_name):
         if model_name in self._model_cache:
@@ -49,6 +98,10 @@ class CardRenderer:
             cards = self._cloze_cards(fields, field_order, templates)
         else:
             cards = self._template_cards(fields, field_order, templates)
+
+        for c in cards:
+            c["question"] = self.inline_media(c["question"])
+            c["answer"] = self.inline_media(c["answer"])
 
         return {
             "question": cards[0]["question"],
