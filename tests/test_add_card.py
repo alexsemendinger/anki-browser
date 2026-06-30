@@ -131,3 +131,11 @@ def test_main_id_with_multiple_cards_errors(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "stdin", io.StringIO('[{"fields":{"Front":"a"}},{"fields":{"Front":"b"}}]'))
     with pytest.raises(SystemExit):
         add_card.main()
+
+
+def test_main_schema_prints_json_and_exits(monkeypatch, tmp_path, capsys):
+    _wire(monkeypatch, tmp_path, ["--schema"])
+    add_card.main()
+    data = json.loads(capsys.readouterr().out)
+    assert "models" in data and "decks" in data
+    assert data["models"]["Basic"] == ["Front", "Back"]

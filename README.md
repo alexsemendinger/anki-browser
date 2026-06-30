@@ -143,16 +143,19 @@ echo '{"note_type":"Cloze","deck":"Biology",
 ./add-card --no-validate -t Basic -d Biology -f Front=Q -f Back=A
 ```
 
+`./add-card --schema` prints every note type with its exact fields and the real
+deck names as JSON — get this first so you use valid names.
+
 Validation **errors** (unknown note type, unknown field) block the write;
 **warnings** (deck doesn't exist yet, empty first field, cloze with no
 `{{c1::...}}` markers) are printed but don't. See `./add-card --help` for all flags.
 
-**For a Claude Code instance:** generate your notes, then for each call
-`./add-card --json -` with the card JSON on stdin. Match `note_type` to a real
-Anki model and use that model's exact field names (see the schema reference
-below). After a card is sent back with a comment it lands in that file's
-`comment_history` — read it, revise, and write the same `id` to update the card
-in place.
+**For a Claude Code instance:** get the schema with `./add-card --schema`, then
+add cards via `./add-card --json -` with the card JSON on stdin. Put these
+instructions in a `CLAUDE.md` in whatever directory you launch the agent from and
+it picks them up automatically. After a card is sent back with a comment it lands
+in that file's `comment_history` — read it, revise, and write the same `id` to
+update the card in place.
 
 ## Note type / field reference
 

@@ -40,6 +40,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend import inbox as inbox_mod  # noqa: E402
+from backend import models as models_mod  # noqa: E402
 from backend.ankiconnect import AnkiConnect, AnkiConnectError, AnkiUnavailable  # noqa: E402
 from backend.config import load_config  # noqa: E402
 
@@ -135,11 +136,20 @@ def main():
                    help="a card object or JSON array of objects; use - to read stdin")
     p.add_argument("--no-validate", action="store_true",
                    help="skip AnkiConnect validation (use when Anki is closed)")
+    p.add_argument("--schema", action="store_true",
+                   help="print note types, their fields, and decks as JSON, then exit")
     p.add_argument("--config", help="path to config.json")
     args = p.parse_args()
 
     cfg = load_config(args.config)
     inbox_dir = cfg["paths"]["inbox"]
+
+    if args.schema:
+        anki = AnkiConnect(cfg["ankiconnect_url"], cfg["ankiconnect_version"])
+        if not anki.reachable():
+            sys.exit("Anki not reachable at %s; open Anki to read the schema." % cfg["ankiconnect_url"])
+        print(json.dumps(models_mod.snapshot(anki), indent=2, ensure_ascii=False))
+        return
 
     if args.json:
         cards = _load_json_cards(args.json)
