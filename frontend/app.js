@@ -24,12 +24,13 @@ const api = {
 
 const $ = (id) => document.getElementById(id);
 
-function toast(msg) {
+function toast(msg, kind) {
   const t = $("toast");
   t.textContent = msg;
+  t.className = "toast" + (kind ? " " + kind : "");
   t.hidden = false;
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => (t.hidden = true), 1600);
+  toast._t = setTimeout(() => (t.hidden = true), 1800);
 }
 
 // --- card rendering into an isolated iframe -------------------------------
@@ -39,7 +40,15 @@ function cardDoc(html, css, withMath) {
   const head = withMath
     ? `<script>${mj}</script><script src="${state.config.mathjax_url}"></script>`
     : "";
-  return `<!doctype html><html><head><meta charset=utf-8><style>html,body{margin:0;padding:14px}${css || ""}</style>${head}</head><body><div class="card">${html || ""}</div></body></html>`;
+  // A sandboxed iframe traps focus, so a click on the card would otherwise
+  // swallow keystrokes and the shortcuts stop working. Forward keydowns to the
+  // app via postMessage (and stop the card from scrolling on the keys we use).
+  const keyfwd =
+    "<script>document.addEventListener('keydown',function(e){" +
+    "parent.postMessage({source:'adw-card',type:'key',key:e.key,ctrlKey:e.ctrlKey," +
+    "metaKey:e.metaKey,shiftKey:e.shiftKey,altKey:e.altKey},'*');" +
+    "if(e.key===' '||e.key.indexOf('Arrow')===0){e.preventDefault();}});<\/script>";
+  return `<!doctype html><html><head><meta charset=utf-8><style>html,body{margin:0;padding:14px}${css || ""}</style>${head}</head><body><div class="card">${html || ""}</div>${keyfwd}</body></html>`;
 }
 
 function frameInto(container, html, css, withMath) {
@@ -161,7 +170,7 @@ function renderInbox() {
     .join("");
 }
 
-async function inboxAction(path) {
+async function inboxAction(path, okMsg, kind) {
   const item = state.inbox.cards[state.inbox.idx];
   if (!item) return;
   const res = await api.send(`/api/inbox/${item.card.id}/${path}`, "POST", {});
@@ -171,6 +180,7 @@ async function inboxAction(path) {
   }
   await loadInbox();
   await refreshSession();
+  if (okMsg) toast(okMsg, kind);
 }
 
 // Approve the CURRENT card. The note is only sent to Anki once every card it
@@ -187,7 +197,7 @@ async function approveCard() {
     return;
   }
   if (res.data.committed) {
-    toast("approved → deck");
+    toast("approved → deck", "ok");
     await loadInbox();
     await refreshSession();
     return;
@@ -201,7 +211,7 @@ async function approveCard() {
   }
   state.inbox.flipped = false;
   renderInbox();
-  toast("card approved");
+  toast("card approved", "ok");
 }
 
 // --- repair ---------------------------------------------------------------
@@ -431,7 +441,7 @@ async function doUndo() {
     toast("nothing to undo");
     return;
   }
-  toast("undo: " + res.data.undone);
+  toast("undo: " + res.data.undone, "info");
   if (state.surface === "inbox") await loadInbox();
   if (state.surface === "repair") await loadRepair();
   if (state.surface === "stats") await loadStats();
@@ -528,6 +538,7 @@ async function submitComment() {
   state.inbox.idx = Math.min(state.inbox.idx + 1, state.inbox.cards.length - 1);
   await loadInbox();
   await refreshSession();
+  toast("sent back", "info");
 }
 
 function openSession() {
@@ -637,7 +648,7 @@ function inboxKeys(k, e) {
   else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.flipped = false; renderInbox(); }
   else if (k === " ") { e.preventDefault(); s.flipped = !s.flipped; renderInbox(); }
   else if (k === "a") approveCard();
-  else if (k === "d") inboxAction("delete");
+  else if (k === "d") inboxAction("delete", "deleted → graveyard", "del");
   else if (k === "c") { e.preventDefault(); openCommenter(); }
   else if (k === "e") { e.preventDefault(); openEditor(); }
 }
@@ -696,6 +707,17 @@ document.querySelectorAll(".tab").forEach((t) =>
 $("f-apply").addEventListener("click", () => loadSurvey(true));
 $("f-flip").addEventListener("click", toggleFlipAll);
 document.addEventListener("keydown", onKey);
+
+// card iframes forward their keystrokes here (see cardDoc) so shortcuts keep
+// working while a card is focused
+window.addEventListener("message", (ev) => {
+  const d = ev.data;
+  if (!d || d.source !== "adw-card" || d.type !== "key") return;
+  onKey({
+    key: d.key, ctrlKey: d.ctrlKey, metaKey: d.metaKey, shiftKey: d.shiftKey, altKey: d.altKey,
+    target: { tagName: "IFRAME" }, preventDefault() {},
+  });
+});
 
 async function boot() {
   state.config = await api.get("/api/config");
