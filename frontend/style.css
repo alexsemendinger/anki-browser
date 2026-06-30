@@ -155,6 +155,17 @@ body { display: flex; flex-direction: column; height: 100vh; }
 #help-body .row { display: flex; gap: 10px; padding: 2px 0; }
 #help-body .k { width: 70px; color: var(--accent); }
 
+.iconbtn { background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-size: 15px; border-radius: 6px; padding: 2px 7px; }
+.iconbtn:hover { color: var(--fg); background: #262b34; }
+.set-row { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
+.set-row > label { color: var(--muted); font-size: 12px; }
+.set-row input[type="text"], .set-row input[type="password"], .set-row select {
+  background: #11131a; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 13px; width: 100%;
+}
+.set-inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 14px; color: var(--fg); font-size: 13px; }
+.set-row button { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.set-row button:hover { border-color: var(--accent); }
+
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
   background: #262b34; border: 1px solid var(--line); border-left: 4px solid var(--line);

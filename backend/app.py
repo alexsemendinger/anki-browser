@@ -82,6 +82,22 @@ def create_app(cfg=None):
     def get_config():
         return jsonify(config_mod.public_config(cfg))
 
+    @app.get("/api/settings")
+    def get_settings():
+        return jsonify(config_mod.settings_view(cfg))
+
+    @app.post("/api/config")
+    def set_config():
+        updates = request.get_json(silent=True) or {}
+        bm = updates.get("beeminder")
+        if isinstance(bm, dict):
+            if not bm.get("auth_token"):
+                bm.pop("auth_token", None)  # blank field -> keep the existing token
+            if bm.get("push_on") not in (None, "session_end", "each_action"):
+                return jsonify({"error": "invalid push_on"}), 400
+        config_mod.save_user_config(cfg, updates)
+        return jsonify({"ok": True, "settings": config_mod.settings_view(cfg)})
+
     @app.get("/api/status")
     def status():
         try:

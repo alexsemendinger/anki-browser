@@ -494,7 +494,7 @@ function anyOverlayOpen() {
 }
 function openOverlay(id) {
   $(id).hidden = false;
-  if (id === "editor" || id === "commenter" || id === "session-prompt") setMode("insert");
+  if (id === "editor" || id === "commenter" || id === "session-prompt" || id === "settings") setMode("insert");
 }
 function closeOverlays() {
   document.querySelectorAll(".overlay").forEach((o) => (o.hidden = true));
@@ -595,6 +595,56 @@ async function startSession() {
   toast("session started");
 }
 
+// --- settings -------------------------------------------------------------
+const BM_COUNTS = ["approve", "delete", "repair", "send_back", "exemplar"];
+
+async function openSettings() {
+  const s = await api.get("/api/settings");
+  const bm = s.beeminder;
+  $("settings-body").innerHTML =
+    `<div class="set-row"><label class="set-inline"><input type="checkbox" id="set-bm-enabled" ${bm.enabled ? "checked" : ""}> enabled</label></div>` +
+    `<div class="set-row"><label>username</label><input id="set-bm-username" type="text" value="${escapeHtml(bm.username)}"></div>` +
+    `<div class="set-row"><label>auth token ${bm.auth_token_set ? "· already set (blank = keep)" : ""}</label><input id="set-bm-token" type="password" placeholder="${bm.auth_token_set ? "••••••••" : "paste token"}"></div>` +
+    `<div class="set-row"><label>goal slug</label><input id="set-bm-goal" type="text" value="${escapeHtml(bm.goal)}"></div>` +
+    `<div class="set-row"><label>push when</label><select id="set-bm-pushon"><option value="session_end" ${bm.push_on === "session_end" ? "selected" : ""}>session end</option><option value="each_action" ${bm.push_on === "each_action" ? "selected" : ""}>each action</option></select></div>` +
+    `<div class="set-row"><label>counts toward goal</label><div>${BM_COUNTS.map((k) => `<label class="set-inline"><input type="checkbox" data-count="${k}" ${bm.count[k] ? "checked" : ""}> ${k}</label>`).join("")}</div></div>` +
+    `<div class="set-row"><button id="set-bm-test">push now</button> <span class="muted" id="set-bm-result"></span></div>`;
+  $("set-bm-test").addEventListener("click", testBeeminderPush);
+  openOverlay("settings");
+  $("set-bm-username").focus();
+}
+
+function collectSettings() {
+  const count = {};
+  document.querySelectorAll("#settings-body [data-count]").forEach((c) => (count[c.dataset.count] = c.checked));
+  const bm = {
+    enabled: $("set-bm-enabled").checked,
+    username: $("set-bm-username").value.trim(),
+    goal: $("set-bm-goal").value.trim(),
+    push_on: $("set-bm-pushon").value,
+    count,
+  };
+  const tok = $("set-bm-token").value;
+  if (tok) bm.auth_token = tok; // blank -> backend keeps the existing token
+  return { beeminder: bm };
+}
+
+async function saveSettings(close) {
+  const res = await api.send("/api/config", "POST", collectSettings());
+  if (!res.ok) { toast(res.data.error || "save failed"); return false; }
+  if (close !== false) { toast("settings saved", "ok"); closeOverlays(); }
+  return true;
+}
+
+async function testBeeminderPush() {
+  if (!(await saveSettings(false))) return;
+  const res = await api.send("/api/beeminder/push", "POST", {});
+  const d = res.data || {};
+  $("set-bm-result").textContent = d.pushed
+    ? `pushed ${d.value} for ${d.daystamp}`
+    : `not pushed: ${d.reason || d.error || "?"}`;
+}
+
 // --- help -----------------------------------------------------------------
 const HELP = [
   ["1-5", "inbox · repair · survey · stats · graveyard"],
@@ -608,6 +658,7 @@ const HELP = [
   ["g", "exemplar, then g good / b bad"],
   ["u", "undo"],
   ["s", "start session / set target"],
+  [",", "settings (beeminder)"],
   ["?", "this help"],
 ];
 function buildHelp() {
@@ -653,6 +704,11 @@ function onKey(e) {
     if (e.key === "b") commitExemplar("bad");
     return;
   }
+  if (!$("settings").hidden) {
+    if (e.key === "Escape") { closeOverlays(); return; }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSettings(); }
+    return;
+  }
   if (!$("help").hidden) {
     if (e.key === "Escape" || e.key === "?") toggleHelp();
     return;
@@ -672,6 +728,7 @@ function onKey(e) {
   if (k === "4") return setSurface("stats");
   if (k === "5") return setSurface("graveyard");
   if (k === "?") return toggleHelp();
+  if (k === ",") return openSettings();
   if (k === "u") return doUndo();
   if (k === "s") { e.preventDefault(); return openSession(); }
   if (k === "g") return startExemplar();
@@ -748,6 +805,7 @@ document.querySelectorAll(".tab").forEach((t) =>
 $("f-apply").addEventListener("click", () => loadSurvey(true));
 $("f-flip").addEventListener("click", toggleFlipAll);
 document.addEventListener("keydown", onKey);
+$("settings-btn").addEventListener("click", openSettings);
 
 // card iframes forward their keystrokes here (see cardDoc) so shortcuts keep
 // working while a card is focused

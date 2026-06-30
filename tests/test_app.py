@@ -356,3 +356,31 @@ def test_graveyard_list_and_restore(client):
 
 def test_graveyard_restore_missing_404(client):
     assert client.post("/api/graveyard/nope/restore").status_code == 404
+
+
+def test_settings_view_hides_token_value(client):
+    client.cfg["beeminder"]["auth_token"] = "SECRET"
+    s = client.get("/api/settings").get_json()
+    assert "auth_token" not in s["beeminder"]
+    assert s["beeminder"]["auth_token_set"] is True
+
+
+def test_save_config_updates_live_and_persists(client):
+    import json
+    res = client.post("/api/config", json={"beeminder": {"enabled": True, "goal": "g", "auth_token": "TOK"}})
+    assert res.get_json()["ok"] is True
+    assert client.cfg["beeminder"]["enabled"] is True
+    assert client.cfg["beeminder"]["auth_token"] == "TOK"
+    on_disk = json.load(open(client.cfg["_config_path"]))
+    assert on_disk["beeminder"]["goal"] == "g"
+
+
+def test_save_config_blank_token_keeps_existing(client):
+    client.cfg["beeminder"]["auth_token"] = "KEEP"
+    client.post("/api/config", json={"beeminder": {"auth_token": "", "goal": "g2"}})
+    assert client.cfg["beeminder"]["auth_token"] == "KEEP"
+    assert client.cfg["beeminder"]["goal"] == "g2"
+
+
+def test_save_config_invalid_push_on_rejected(client):
+    assert client.post("/api/config", json={"beeminder": {"push_on": "hourly"}}).status_code == 400

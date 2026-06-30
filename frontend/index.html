@@ -16,6 +16,7 @@
       <button data-surface="graveyard" class="tab">5 graveyard <span class="badge" id="graveyard-badge"></span></button>
     </nav>
     <div id="topright">
+      <button id="settings-btn" class="iconbtn" title="settings ( , )">⚙</button>
       <span id="session" class="muted"></span>
       <span id="anki-dot" class="dot" title="Anki"></span>
       <span id="mode" class="mode">NORMAL</span>
@@ -102,6 +103,15 @@
       <div class="panel-title">session target</div>
       <input id="session-target" type="number" min="1" placeholder="count (blank = none)" />
       <div class="hint muted">Enter start · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- settings -->
+  <div id="settings" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-title">settings · beeminder</div>
+      <div id="settings-body"></div>
+      <div class="hint muted">Ctrl+Enter save · Esc cancel</div>
     </div>
   </div>
 
