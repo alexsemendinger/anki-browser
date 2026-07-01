@@ -1,5 +1,10 @@
 # Design Notes & Handoff
 
+> **This documents the original v1.** The app has evolved a lot since (per-card
+> approval, extra surfaces, media, settings, stats, etc.). For the current state
+> and — importantly — how Alex thinks about the app, read **`docs/HANDOFF.md`**
+> first. `docs/TODO.md` is the live backlog.
+
 Context for whoever picks this up next. The original spec is in `docs/SPEC.md`;
 user-facing usage is in `README.md`. This file is the "why," the things you
 might question when you read the code, and what is and isn't proven.

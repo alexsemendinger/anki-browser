@@ -55,12 +55,20 @@ mkdir -p data/inbox && cp sample_inbox/*.json data/inbox/
 
 ## Surfaces
 
-- **1 inbox** — provisional cards, one at a time. Approve into the deck, send
-  back with a comment, or delete to the graveyard. The count drains to zero.
+- **1 inbox** — provisional cards, one at a time, filterable by deck. Approve
+  into the deck, send back with a comment (sinks to the bottom of the queue), or
+  delete to the graveyard. A note only reaches Anki once *every* card it
+  generates (cloze ordinals / templates) is approved.
 - **2 repair** — live deck cards carrying a red or orange Anki flag. Edit
   inline; saving writes the fields back and clears the native flag.
-- **3 survey** — a grid for scanning and filtering. Orienting, not the workspace.
-- **4 stats** — lifetime processed, approval rate, judgments, queue sizes.
+- **3 survey** — a grid for scanning a deck. Whole deck loaded, lazy-rendered.
+- **4 stats** — a GitHub-style calendar heatmap, a reviews-per-day chart, and
+  summary tiles.
+- **5 graveyard** — deleted cards; click one to see it rendered, or restore it.
+- **6 exemplars** — frozen good/bad reference snapshots with reasons; click one
+  to see it rendered as a card.
+
+Settings (Beeminder config) live behind the **⚙** button / `,` key.
 
 ## Keys
 
@@ -68,21 +76,24 @@ Modal, vim-style. A quiet indicator in the top right shows NORMAL or INSERT.
 
 | key | action |
 | --- | --- |
-| `1`-`4` | switch surface |
-| `j` / `k` (or arrows) | previous / next card |
+| `1`-`6` | switch surface |
+| `j` / `k` (or ↑/↓) | move between cards / rows |
+| `h` / `l` (or ←/→) | move between a note's cards (inbox) / grid cells (survey) |
 | `space` | flip |
-| `a` | approve (inbox to deck) |
+| `a` | approve current card (note sent when all its cards are approved) |
 | `d` | delete (inbox to graveyard) |
 | `c` | comment and send back (inbox) |
 | `e` | edit fields (inbox / repair) |
-| `g` | mark exemplar, then `g` good or `b` bad |
+| `g` | mark exemplar: then `g` good / `b` bad, type a why, `Ctrl+Enter` |
 | `u` | undo |
 | `s` | start session / set target |
+| `,` | settings |
 | `?` | help |
 
-In edit and comment overlays: `Ctrl+Enter` commits, `Esc` cancels. In the survey
-grid, arrows move the selection, `space` flips one card, and the flip-all button
-flips the grid (defaults to backs).
+In edit / comment / settings overlays: `Ctrl+Enter` commits, `Esc` cancels. In
+the survey grid, arrows move the selection, `space` flips one card, `f` (or the
+button) flips the whole grid. Card previews (graveyard / exemplars): `space`
+flips, `Esc` closes.
 
 ## Inbox file format
 

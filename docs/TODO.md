@@ -30,7 +30,6 @@ each area.
   media inlined. Same click-to-render added to the graveyard.
 - [ ] **Search** over exemplars (will matter once there are many).
 - [ ] **Edit** an exemplar in place (vs. delete + re-add).
-- [ ] Consider folding a send-back comment into an exemplar.
 - [ ] Consider folding a send-back comment into an exemplar — several send-back
   comments were really "this is a good/bad example because…".
 
