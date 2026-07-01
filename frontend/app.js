@@ -383,8 +383,75 @@ function markSelection() {
 }
 
 // --- stats ----------------------------------------------------------------
+function dayTotal(d) {
+  return (d.approve || 0) + (d.delete || 0) + (d.repair || 0) + (d.send_back || 0);
+}
+
+function utcMidnight(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+// GitHub-style heatmap: one cell per day for the trailing ~year, coloured by
+// how many cards were processed that day.
+function renderHeatmap(daily) {
+  const counts = {};
+  daily.forEach((d) => (counts[d.day] = dayTotal(d)));
+  const end = utcMidnight(new Date());
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 7 * 52);
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay()); // back to a Sunday
+  const level = (n) => (n === 0 ? 0 : n < 10 ? 1 : n < 25 ? 2 : n < 50 ? 3 : 4);
+  const cur = new Date(start);
+  const weeks = [];
+  while (cur <= end) {
+    const week = [];
+    for (let i = 0; i < 7; i++) {
+      if (cur <= end) {
+        const key = cur.toISOString().slice(0, 10);
+        week.push(`<div class="hm-cell l${level(counts[key] || 0)}" title="${key}: ${counts[key] || 0}"></div>`);
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      } else {
+        week.push('<div class="hm-cell empty"></div>');
+      }
+    }
+    weeks.push(`<div class="hm-week">${week.join("")}</div>`);
+  }
+  const days = ["S", "M", "T", "W", "T", "F", "S"].map((d) => `<span>${d}</span>`).join("");
+  $("heatmap").innerHTML = `<div class="hm-days">${days}</div><div class="hm-weeks">${weeks.join("")}</div>`;
+}
+
+// Stacked bars, one per day for the last 30 days, split by action type.
+function renderReviews(daily) {
+  const by = {};
+  daily.forEach((d) => (by[d.day] = d));
+  const end = utcMidnight(new Date());
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const dt = new Date(end);
+    dt.setUTCDate(dt.getUTCDate() - i);
+    const key = dt.toISOString().slice(0, 10);
+    const d = by[key] || {};
+    days.push({ key, approve: d.approve || 0, delete: d.delete || 0, repair: d.repair || 0, send_back: d.send_back || 0 });
+  }
+  const max = Math.max(1, ...days.map(dayTotal));
+  const H = 140;
+  const seg = (n, cls) => (n ? `<div class="rev-seg ${cls}" style="height:${(n / max) * H}px"></div>` : "");
+  const bars = days
+    .map((d) =>
+      `<div class="rev-col" title="${d.key} · ${dayTotal(d)} (a${d.approve} d${d.delete} r${d.repair} s${d.send_back})">` +
+      seg(d.approve, "approve") + seg(d.repair, "repair") + seg(d.send_back, "sendback") + seg(d.delete, "delete") +
+      `</div>`
+    )
+    .join("");
+  $("reviews-chart").innerHTML =
+    `<div class="rev-bars" style="height:${H}px">${bars}</div>` +
+    `<div class="rev-legend"><span class="ll approve">approve</span><span class="ll repair">repair</span><span class="ll sendback">send back</span><span class="ll delete">delete</span><span class="muted">peak ${max}/day</span></div>`;
+}
+
 async function loadStats() {
   const s = await api.get("/api/stats");
+  renderHeatmap(s.daily || []);
+  renderReviews(s.daily || []);
   const tiles = [
     ["processed", s.processed_lifetime],
     ["approval rate", s.approval_rate == null ? "—" : Math.round(s.approval_rate * 100) + "%"],

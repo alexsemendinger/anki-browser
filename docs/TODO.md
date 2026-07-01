@@ -10,6 +10,17 @@ each area.
   created batch to spot glaring issues before reviewing one-by-one. *(moderate-high
   priority; above better browser search)*
 
+## Stats
+- [x] **Calendar heatmap** (GitHub-style, trailing year) + **reviews-per-day
+  stacked bar chart** (30 days, by action type) — done 2026-07-01, from the
+  existing `events.jsonl` (`stats.summary().daily`). No new data needed.
+- [ ] **Cards added per day.** Needs a new "added" event logged when a card
+  enters the inbox (e.g. from `add_card.py`); no historical data, forward-only.
+- [ ] **Queue size per day** (to see if the backlog is growing/shrinking). Needs
+  a daily snapshot of inbox count; no historical data, forward-only.
+- [ ] Time-range toggles on the charts (1mo / 3mo / 1yr), a cumulative line, and
+  year navigation on the heatmap — polish, later.
+
 ## Exemplars
 - [ ] **Prompt for a reason/comment when marking an exemplar.** Backend already
   stores a `comment` field (`exemplars.add(..., comment=...)`); the UI just sends
