@@ -6,6 +6,7 @@ approved; nothing is hard-deleted.
 """
 import json
 import os
+from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -288,7 +289,7 @@ def create_app(cfg=None):
     def survey():
         parts = []
         if request.args.get("deck"):
-            parts.append('deck:"%s"' % request.args["deck"])
+            parts.append('deck:"%s"' % request.args["deck"].replace('"', '\\"'))
         if request.args.get("tag"):
             parts.append("tag:%s" % request.args["tag"])
         if request.args.get("added"):
@@ -453,8 +454,6 @@ def create_app(cfg=None):
     def session_start():
         body = request.json or {}
         target = body.get("target")
-        from datetime import datetime, timezone
-
         _save_session(
             paths["session"],
             {
