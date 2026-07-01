@@ -22,13 +22,15 @@ each area.
   year navigation on the heatmap — polish, later.
 
 ## Exemplars
-- [ ] **Prompt for a reason/comment when marking an exemplar.** Backend already
-  stores a `comment` field (`exemplars.add(..., comment=...)`); the UI just sends
-  `comment: ""`. So this is a small frontend add.
-- [x] **See / delete the exemplar list** — done 2026-07-01. Stats tab shows each
-  exemplar with both fields (front first), verdict, deck, comment, + a delete
-  button (`/api/exemplars/<idx>/delete`). *Editing* an exemplar in place is still
-  TODO.
+- [x] **Comment / "why" when marking an exemplar** — done 2026-07-01. Pressing
+  `g` then `g`/`b` reveals a "why" box; Ctrl+Enter saves it into the exemplar.
+- [x] **Own surface + see / delete / render-as-card** — done 2026-07-01.
+  Exemplars are their own tab (`6`), listed compactly (verdict · front · deck ·
+  delete); clicking a row opens it rendered **as a real card** (flippable), with
+  media inlined. Same click-to-render added to the graveyard.
+- [ ] **Search** over exemplars (will matter once there are many).
+- [ ] **Edit** an exemplar in place (vs. delete + re-add).
+- [ ] Consider folding a send-back comment into an exemplar.
 - [ ] Consider folding a send-back comment into an exemplar — several send-back
   comments were really "this is a good/bad example because…".
 

@@ -14,6 +14,7 @@
       <button data-surface="survey" class="tab">3 survey</button>
       <button data-surface="stats" class="tab">4 stats</button>
       <button data-surface="graveyard" class="tab">5 graveyard <span class="badge" id="graveyard-badge"></span></button>
+      <button data-surface="exemplars" class="tab">6 exemplars</button>
     </nav>
     <div id="topright">
       <button id="settings-btn" class="iconbtn" title="settings ( , )">⚙</button>
@@ -69,14 +70,17 @@
         <h3 class="muted">reviews per day · 30 days</h3>
         <div id="reviews-chart"></div>
         <div id="stats-grid"></div>
-        <h3 class="muted">exemplars</h3>
-        <div id="exemplar-list"></div>
       </div>
     </section>
 
     <!-- graveyard -->
     <section id="surface-graveyard" class="surface" hidden>
       <div id="graveyard-list"></div>
+    </section>
+
+    <!-- exemplars -->
+    <section id="surface-exemplars" class="surface" hidden>
+      <div id="exemplar-list"></div>
     </section>
   </main>
 
@@ -101,8 +105,18 @@
   <!-- exemplar good/bad prompt -->
   <div id="exemplar-prompt" class="overlay" hidden>
     <div class="panel small">
-      <div class="panel-title">exemplar</div>
-      <div class="choices">g good · b bad · Esc cancel</div>
+      <div class="panel-title" id="exemplar-title">exemplar</div>
+      <textarea id="exemplar-comment" rows="3" placeholder="why (optional)" hidden></textarea>
+      <div class="choices" id="exemplar-choices">g good · b bad · Esc cancel</div>
+    </div>
+  </div>
+
+  <!-- card preview (render an exemplar / graveyard card as a real card) -->
+  <div id="cardview" class="overlay" hidden>
+    <div class="panel cardview-panel">
+      <div class="cardview-meta" id="cardview-meta"></div>
+      <div class="cardframe" id="cardview-frame"></div>
+      <div class="hint muted">space flip · Esc close</div>
     </div>
   </div>
 

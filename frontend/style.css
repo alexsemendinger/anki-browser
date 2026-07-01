@@ -168,16 +168,23 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .stat .n { font-size: 26px; }
 .stat .k { color: var(--muted); font-size: 12px; }
 #exemplar-list { padding: 0 0 20px; }
-.ex { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-.ex-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+#exemplar-list { flex: 1; overflow: auto; padding: 14px; }
+.ex { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 4px; cursor: pointer; }
+.ex:hover { background: #20242c; }
 .ex .v { padding: 1px 7px; border-radius: 9px; font-size: 11px; color: #111; }
 .ex .good { background: var(--green); }
 .ex .bad { background: var(--red); }
-.ex-del { margin-left: auto; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
+.ex-front { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-cmt { color: var(--accent); font-size: 12px; max-width: 32%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-deck { flex-shrink: 0; }
+.ex-del { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
 .ex-del:hover { border-color: var(--red); color: var(--fg); }
-.ex-field { font-size: 13px; margin: 3px 0; }
-.ex-fname { color: var(--muted); font-size: 11px; margin-right: 6px; }
-.ex-comment { margin-top: 6px; border-left: 2px solid var(--accent); padding: 2px 10px; color: var(--muted); font-size: 12px; }
+
+/* card preview overlay */
+.cardview-panel { width: min(820px, 92vw); }
+.cardview-meta { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 12px; }
+#cardview-frame { flex: none; width: 100%; max-height: none; height: min(60vh, 520px); }
+#exemplar-comment { width: 100%; background: #11131a; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 13px/1.5 ui-monospace, monospace; resize: vertical; margin-bottom: 8px; }
 
 /* overlays */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 20; }

@@ -8,6 +8,10 @@ const state = {
   repair: { cards: [], idx: 0, flipped: false },
   survey: { cards: [], total: 0, offset: 0, limit: 200, sel: 0, flipAll: false, loading: false },
   exemplarCtx: null,
+  exemplarVerdict: null,
+  exemplars: [],
+  graveyard: [],
+  cardView: null,
   targetAnnounced: false,
 };
 
@@ -78,6 +82,7 @@ function setSurface(name) {
   if (name === "survey") loadSurvey(true);
   if (name === "stats") loadStats();
   if (name === "graveyard") loadGraveyard();
+  if (name === "exemplars") loadExemplars();
 }
 
 function updateBadges() {
@@ -467,35 +472,54 @@ async function loadStats() {
   $("stats-grid").innerHTML = tiles
     .map(([k, n]) => `<div class="stat"><div class="n">${n}</div><div class="k">${k}</div></div>`)
     .join("");
-  const ex = await api.get("/api/exemplars");
-  $("exemplar-list").innerHTML = ex.exemplars.length
-    ? ex.exemplars.map(exemplarCard).join("")
+}
+
+// --- exemplars (own surface) ----------------------------------------------
+function frontText(fields) {
+  const keys = Object.keys(fields || {});
+  const front = keys.find((k) => /^(front|text|question)/i.test(k)) || keys[0];
+  return front ? String(fields[front] || "") : "";
+}
+
+async function loadExemplars() {
+  const data = await api.get("/api/exemplars");
+  state.exemplars = data.exemplars || [];
+  const list = $("exemplar-list");
+  list.innerHTML = state.exemplars.length
+    ? state.exemplars.map(exemplarRow).join("")
     : '<div class="empty">no exemplars yet</div>';
 }
 
-function exemplarCard(e) {
-  const when = (e.date || "").slice(0, 10);
-  // question-ish fields first so the front reads before the back
-  const order = Object.keys(e.fields || {}).sort(
-    (a, b) => (/^(front|text|question)/i.test(a) ? 0 : 1) - (/^(front|text|question)/i.test(b) ? 0 : 1)
-  );
-  const fields = order
-    .map((k) => `<div class="ex-field"><span class="ex-fname">${escapeHtml(k)}</span> ${escapeHtml(stripTags(String(e.fields[k] || ""))).slice(0, 400)}</div>`)
-    .join("");
-  const comment = e.comment ? `<div class="ex-comment">${escapeHtml(e.comment)}</div>` : "";
+function exemplarRow(e) {
+  const front = escapeHtml(stripTags(frontText(e.fields))).slice(0, 150);
+  const comment = e.comment ? `<span class="ex-cmt">${escapeHtml(e.comment).slice(0, 120)}</span>` : "";
   return (
-    `<div class="ex">` +
-    `<div class="ex-head"><span class="v ${e.verdict}">${e.verdict}</span>` +
-    `<span class="muted">${escapeHtml(e.deck || "")}</span><span class="muted">${escapeHtml(e.note_type || "")}</span>` +
-    `<span class="muted">${when}</span><button class="ex-del" data-idx="${e._idx}">delete</button></div>` +
-    fields + comment +
+    `<div class="ex" data-idx="${e._idx}">` +
+    `<span class="v ${e.verdict}">${e.verdict}</span>` +
+    `<span class="ex-front">${front}</span>` +
+    comment +
+    `<span class="muted ex-deck">${escapeHtml(e.deck || "")}</span>` +
+    `<button class="ex-del" data-idx="${e._idx}">delete</button>` +
     `</div>`
   );
+}
+
+// --- card preview overlay (render an exemplar / graveyard card as a card) --
+function openCardView(view) {
+  state.cardView = { question: view.question || "", answer: view.answer || "", css: view.css || "", meta: view.meta || "", flipped: false };
+  renderCardView();
+  openOverlay("cardview");
+}
+function renderCardView() {
+  const v = state.cardView;
+  $("cardview-meta").innerHTML = v.meta + '<span class="muted">' + (v.flipped ? "back" : "front") + "</span>";
+  frameInto($("cardview-frame"), v.flipped ? v.answer : v.question, v.css, true);
 }
 
 // --- graveyard ------------------------------------------------------------
 async function loadGraveyard() {
   const data = await api.get("/api/graveyard");
+  state.graveyard = data.cards || [];
   $("graveyard-badge").textContent = data.count || "";
   const list = $("graveyard-list");
   if (!data.cards.length) {
@@ -505,11 +529,10 @@ async function loadGraveyard() {
   list.innerHTML = data.cards
     .map((e) => {
       const c = e.card || {};
-      const first = Object.values(c.fields || {})[0] || "";
-      const snip = escapeHtml(stripTags(first)).slice(0, 120);
+      const snip = escapeHtml(stripTags(frontText(c.fields))).slice(0, 120);
       const when = (e.buried || "").slice(0, 16).replace("T", " ");
       return (
-        `<div class="gravecard">` +
+        `<div class="gravecard" data-id="${escapeHtml(c.id || "")}">` +
         `<div class="grave-meta"><span>${when}</span><span>${escapeHtml(c.note_type || "")}</span><span>${escapeHtml(c.deck || "")}</span></div>` +
         `<div class="grave-text">${snip}</div>` +
         `<button class="restore" data-id="${escapeHtml(c.id || "")}">restore</button>` +
@@ -521,15 +544,26 @@ async function loadGraveyard() {
 
 $("graveyard-list").addEventListener("click", async (ev) => {
   const btn = ev.target.closest(".restore");
-  if (!btn) return;
-  const res = await api.send(`/api/graveyard/${encodeURIComponent(btn.dataset.id)}/restore`, "POST", {});
-  if (res.ok) {
-    toast("restored → inbox", "info");
-    await loadGraveyard();
-    await loadInbox(); // refresh inbox count/badge
-  } else {
-    toast(res.data.error || "failed");
+  if (btn) {
+    const res = await api.send(`/api/graveyard/${encodeURIComponent(btn.dataset.id)}/restore`, "POST", {});
+    if (res.ok) {
+      toast("restored → inbox", "info");
+      await loadGraveyard();
+      await loadInbox(); // refresh inbox count/badge
+    } else {
+      toast(res.data.error || "failed");
+    }
+    return;
   }
+  const row = ev.target.closest(".gravecard");
+  if (!row) return;
+  const e = state.graveyard.find((x) => String((x.card || {}).id) === row.dataset.id);
+  if (!e) return;
+  const r = e.rendered || {};
+  openCardView({
+    question: r.question, answer: r.answer, css: r.css,
+    meta: `<span class="muted">${escapeHtml((e.card || {}).deck || "")}</span><span class="muted">deleted ${(e.buried || "").slice(0, 10)}</span>`,
+  });
 });
 
 // --- exemplar -------------------------------------------------------------
@@ -555,16 +589,35 @@ function startExemplar() {
   }
   if (!ctx) return;
   state.exemplarCtx = ctx;
+  state.exemplarVerdict = null;
+  const t = $("exemplar-comment");
+  t.value = "";
+  t.hidden = true;
+  $("exemplar-title").textContent = "exemplar";
+  $("exemplar-choices").textContent = "g good · b bad · Esc cancel";
   openOverlay("exemplar-prompt");
 }
 
-async function commitExemplar(verdict) {
-  closeOverlays();
+// phase 1: pick good/bad, which reveals the "why" box (phase 2)
+function pickExemplarVerdict(v) {
+  state.exemplarVerdict = v;
+  $("exemplar-title").textContent = "exemplar · " + v;
+  $("exemplar-choices").textContent = "Ctrl+Enter save · Esc cancel";
+  const t = $("exemplar-comment");
+  t.hidden = false;
+  t.focus();
+}
+
+async function commitExemplar() {
   const ctx = state.exemplarCtx;
+  const verdict = state.exemplarVerdict;
+  const comment = $("exemplar-comment").value.trim();
+  closeOverlays();
   state.exemplarCtx = null;
-  if (!ctx) return;
-  const res = await api.send("/api/exemplar", "POST", { ...ctx, verdict, comment: "" });
-  toast(res.ok ? "exemplar " + verdict : "failed");
+  state.exemplarVerdict = null;
+  if (!ctx || !verdict) return;
+  const res = await api.send("/api/exemplar", "POST", { ...ctx, verdict, comment });
+  toast(res.ok ? "exemplar " + verdict : "failed", res.ok ? "ok" : undefined);
 }
 
 // --- undo -----------------------------------------------------------------
@@ -744,7 +797,7 @@ async function testBeeminderPush() {
 
 // --- help -----------------------------------------------------------------
 const HELP = [
-  ["1-5", "inbox · repair · survey · stats · graveyard"],
+  ["1-6", "inbox · repair · survey · stats · graveyard · exemplars"],
   ["j / k", "move down / up"],
   ["h / l", "move left / right"],
   ["space", "flip"],
@@ -752,7 +805,7 @@ const HELP = [
   ["d", "delete (inbox -> graveyard)"],
   ["c", "comment + send back (inbox)"],
   ["e", "edit fields (inbox / repair)"],
-  ["g", "exemplar, then g good / b bad"],
+  ["g", "exemplar (g/b, then why + Ctrl+Enter)"],
   ["u", "undo"],
   ["s", "start session / set target"],
   [",", "settings (beeminder)"],
@@ -795,10 +848,19 @@ function onKey(e) {
     if (e.key === "Enter") { e.preventDefault(); startSession(); }
     return;
   }
+  if (!$("cardview").hidden) {
+    if (e.key === "Escape") { closeOverlays(); return; }
+    if (e.key === " ") { e.preventDefault(); state.cardView.flipped = !state.cardView.flipped; renderCardView(); }
+    return;
+  }
   if (!$("exemplar-prompt").hidden) {
-    if (e.key === "Escape") closeOverlays();
-    if (e.key === "g") commitExemplar("good");
-    if (e.key === "b") commitExemplar("bad");
+    if (e.key === "Escape") { closeOverlays(); return; }
+    if (!state.exemplarVerdict) {
+      if (e.key === "g") pickExemplarVerdict("good");
+      else if (e.key === "b") pickExemplarVerdict("bad");
+      return;
+    }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitExemplar(); }
     return;
   }
   if (!$("settings").hidden) {
@@ -824,6 +886,7 @@ function onKey(e) {
   if (k === "3") return setSurface("survey");
   if (k === "4") return setSurface("stats");
   if (k === "5") return setSurface("graveyard");
+  if (k === "6") return setSurface("exemplars");
   if (k === "?") return toggleHelp();
   if (k === ",") return openSettings();
   if (k === "u") return doUndo();
@@ -904,11 +967,23 @@ $("f-flip").addEventListener("click", toggleFlipAll);
 document.addEventListener("keydown", onKey);
 $("settings-btn").addEventListener("click", openSettings);
 $("exemplar-list").addEventListener("click", async (ev) => {
-  const btn = ev.target.closest(".ex-del");
-  if (!btn) return;
-  const res = await api.send(`/api/exemplars/${btn.dataset.idx}/delete`, "POST", {});
-  if (res.ok) { toast("exemplar deleted", "del"); await loadStats(); }
-  else toast(res.data.error || "failed");
+  const del = ev.target.closest(".ex-del");
+  if (del) {
+    const res = await api.send(`/api/exemplars/${del.dataset.idx}/delete`, "POST", {});
+    if (res.ok) { toast("exemplar deleted", "del"); await loadExemplars(); }
+    else toast(res.data.error || "failed");
+    return;
+  }
+  const row = ev.target.closest(".ex");
+  if (!row) return;
+  const e = state.exemplars.find((x) => String(x._idx) === row.dataset.idx);
+  if (!e) return;
+  const r = e.rendered || {};
+  openCardView({
+    question: r.question, answer: r.answer, css: r.css,
+    meta: `<span class="v ${e.verdict}">${e.verdict}</span><span class="muted">${escapeHtml(e.deck || "")}</span>` +
+      (e.comment ? `<span class="ex-cmt">${escapeHtml(e.comment)}</span>` : ""),
+  });
 });
 $("inbox-deck").addEventListener("change", () => {
   state.inbox.deck = $("inbox-deck").value;

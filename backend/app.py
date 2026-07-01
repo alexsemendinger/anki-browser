@@ -331,6 +331,8 @@ def create_app(cfg=None):
     @app.get("/api/graveyard")
     def graveyard_list():
         rows = graveyard.list_buried(paths["graveyard"])
+        for e in rows:
+            e["rendered"] = renderer.render_provisional(e.get("card", {}))
         return jsonify({"cards": rows, "count": len(rows)})
 
     @app.post("/api/graveyard/<card_id>/restore")
@@ -368,6 +370,10 @@ def create_app(cfg=None):
         rows = exemplars.list_all(paths["exemplars"])
         for i, row in enumerate(rows):
             row["_idx"] = i  # file position, so the UI can delete a specific one
+            r = row.get("rendered") or {}
+            if r:  # re-resolve media so the frozen snapshot can render as a card
+                r["question"] = renderer.inline_media(r.get("question", ""))
+                r["answer"] = renderer.inline_media(r.get("answer", ""))
         rows.reverse()  # newest first
         return jsonify({"exemplars": rows, "count": len(rows)})
 
