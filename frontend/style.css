@@ -108,6 +108,10 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .flag-red { background: var(--red); }
 .flag-orange { background: var(--orange); }
 
+/* inbox deck filter */
+#inbox-filter { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+#inbox-filter select { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; font-size: 13px; }
+
 /* survey */
 #survey-filters { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 #survey-filters input, #survey-filters select, #survey-filters button {

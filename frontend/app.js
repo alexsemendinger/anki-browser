@@ -4,7 +4,7 @@ const state = {
   surface: "inbox",
   mode: "normal",
   config: null,
-  inbox: { cards: [], idx: 0, ord: 0, flipped: false },
+  inbox: { cards: [], idx: 0, ord: 0, flipped: false, deck: "" },
   repair: { cards: [], idx: 0, flipped: false },
   survey: { cards: [], total: 0, offset: 0, limit: 200, sel: 0, flipAll: false, loading: false },
   exemplarCtx: null,
@@ -112,8 +112,10 @@ async function pollStatus() {
 
 // --- inbox ----------------------------------------------------------------
 async function loadInbox() {
-  const data = await api.get("/api/inbox");
+  const q = state.inbox.deck ? "?deck=" + encodeURIComponent(state.inbox.deck) : "";
+  const data = await api.get("/api/inbox" + q);
   state.inbox.cards = data.cards;
+  populateInboxDecks(data.decks || {});
   if (state.inbox.idx >= data.cards.length) state.inbox.idx = Math.max(0, data.cards.length - 1);
   state.inbox.ord = 0;
   state.inbox.flipped = false;
@@ -121,11 +123,23 @@ async function loadInbox() {
   updateBadges();
 }
 
+function populateInboxDecks(decks) {
+  // a deck that's been fully cleared drops out -> fall back to "all"
+  if (state.inbox.deck && !(state.inbox.deck in decks)) state.inbox.deck = "";
+  const total = Object.values(decks).reduce((a, b) => a + b, 0);
+  const names = Object.keys(decks).sort();
+  $("inbox-deck").innerHTML = [`<option value="">all decks (${total})</option>`]
+    .concat(names.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)} (${decks[d]})</option>`))
+    .join("");
+  $("inbox-deck").value = state.inbox.deck;
+}
+
 function renderInbox() {
   const { cards, idx } = state.inbox;
   const single = document.querySelector("#surface-inbox .single");
   if (!cards.length) {
     single.style.display = "none";
+    $("inbox-empty").textContent = state.inbox.deck ? "no cards in this deck" : "inbox empty";
     $("inbox-empty").hidden = false;
     return;
   }
@@ -806,6 +820,11 @@ $("f-apply").addEventListener("click", () => loadSurvey(true));
 $("f-flip").addEventListener("click", toggleFlipAll);
 document.addEventListener("keydown", onKey);
 $("settings-btn").addEventListener("click", openSettings);
+$("inbox-deck").addEventListener("change", () => {
+  state.inbox.deck = $("inbox-deck").value;
+  state.inbox.idx = 0;
+  loadInbox();
+});
 
 // card iframes forward their keystrokes here (see cardDoc) so shortcuts keep
 // working while a card is focused

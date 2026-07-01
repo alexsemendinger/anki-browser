@@ -384,3 +384,15 @@ def test_save_config_blank_token_keeps_existing(client):
 
 def test_save_config_invalid_push_on_rejected(client):
     assert client.post("/api/config", json={"beeminder": {"push_on": "hourly"}}).status_code == 400
+
+
+def test_inbox_filters_by_deck(client):
+    _seed_inbox(client.cfg, deck="Programming", fields={"Front": "p1", "Back": "x"})
+    _seed_inbox(client.cfg, deck="Programming", fields={"Front": "p2", "Back": "x"})
+    _seed_inbox(client.cfg, deck="History", fields={"Front": "h1", "Back": "x"})
+    allc = client.get("/api/inbox").get_json()
+    assert allc["count"] == 3 and allc["total"] == 3
+    assert allc["decks"] == {"Programming": 2, "History": 1}
+    prog = client.get("/api/inbox?deck=Programming").get_json()
+    assert prog["count"] == 2 and prog["total"] == 3  # count filtered, total is whole queue
+    assert all(c["card"]["deck"] == "Programming" for c in prog["cards"])

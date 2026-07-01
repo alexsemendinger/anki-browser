@@ -110,10 +110,15 @@ def create_app(cfg=None):
     @app.get("/api/inbox")
     def inbox_list():
         cards = inbox.list_cards(paths["inbox"])
-        out = []
-        for card in cards:
-            out.append({"card": card, "rendered": renderer.render_provisional(card)})
-        return jsonify({"cards": out, "count": len(out)})
+        decks = {}
+        for c in cards:
+            d = c.get("deck", "")
+            decks[d] = decks.get(d, 0) + 1
+        wanted = request.args.get("deck")
+        if wanted:
+            cards = [c for c in cards if c.get("deck") == wanted]
+        out = [{"card": c, "rendered": renderer.render_provisional(c)} for c in cards]
+        return jsonify({"cards": out, "count": len(out), "total": sum(decks.values()), "decks": decks})
 
     @app.post("/api/inbox/<card_id>/approve")
     def inbox_approve(card_id):
