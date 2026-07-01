@@ -25,19 +25,24 @@
       <div id="inbox-filter">
         <select id="inbox-deck"><option value="">all decks</option></select>
       </div>
-      <div class="single">
-        <div class="cardmeta" id="inbox-meta"></div>
-        <div class="cardframe" id="inbox-frame"></div>
-        <div class="comments" id="inbox-comments"></div>
+      <div class="desk" id="inbox-desk">
+        <div class="deskmain">
+          <div class="deskbar" id="inbox-bar"></div>
+          <div class="cardframe" id="inbox-frame"></div>
+        </div>
+        <aside class="deskside" id="inbox-side"></aside>
       </div>
       <div class="empty" id="inbox-empty" hidden>inbox empty</div>
     </section>
 
     <!-- repair -->
     <section id="surface-repair" class="surface" hidden>
-      <div class="single">
-        <div class="cardmeta" id="repair-meta"></div>
-        <div class="cardframe" id="repair-frame"></div>
+      <div class="desk" id="repair-desk">
+        <div class="deskmain">
+          <div class="deskbar" id="repair-bar"></div>
+          <div class="cardframe" id="repair-frame"></div>
+        </div>
+        <aside class="deskside" id="repair-side"></aside>
       </div>
       <div class="empty" id="repair-empty" hidden>no flagged cards</div>
     </section>
@@ -125,7 +130,7 @@
     <div class="panel cardview-panel">
       <div class="cardview-meta" id="cardview-meta"></div>
       <div class="cardframe" id="cardview-frame"></div>
-      <div class="hint muted">space flip · Esc close</div>
+      <div class="hint muted">space front · Esc close</div>
     </div>
   </div>
 

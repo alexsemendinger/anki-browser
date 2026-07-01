@@ -4,8 +4,11 @@ const state = {
   surface: "inbox",
   mode: "normal",
   config: null,
-  inbox: { cards: [], idx: 0, ord: 0, flipped: false, deck: "" },
-  repair: { cards: [], idx: 0, flipped: false },
+  // front=true shows the question alone (a student's first view); default is
+  // the rendered answer, which by Anki convention IS the full card (FrontSide
+  // + rule + back) -- you're judging cards, not studying them.
+  inbox: { cards: [], idx: 0, ord: 0, front: false, deck: "" },
+  repair: { cards: [], idx: 0, front: false },
   survey: { cards: [], total: 0, offset: 0, limit: 200, sel: 0, flipAll: false, loading: false },
   exemplarCtx: null,
   exemplarVerdict: null,
@@ -76,8 +79,8 @@ function setMode(mode) {
 
 // per-surface keybindings for the bottom bar; global keys after the ·
 const KEYHINTS = {
-  inbox: [["space", "flip"], ["j/k", "card"], ["h/l", "subcard"], ["a", "approve"], ["d", "delete"], ["c", "send back"], ["e", "edit"]],
-  repair: [["space", "flip"], ["j/k", "card"], ["e", "edit"]],
+  inbox: [["space", "front"], ["j/k", "card"], ["h/l", "subcard"], ["a", "approve"], ["d", "delete"], ["c", "send back"], ["e", "edit"]],
+  repair: [["space", "front"], ["j/k", "card"], ["e", "edit"]],
   survey: [["hjkl", "move"], ["space", "flip"], ["f", "flip all"]],
   stats: [],
   graveyard: [["click", "preview"]],
@@ -146,7 +149,7 @@ async function loadInbox() {
   populateInboxDecks(data.decks || {});
   if (state.inbox.idx >= data.cards.length) state.inbox.idx = Math.max(0, data.cards.length - 1);
   state.inbox.ord = 0;
-  state.inbox.flipped = false;
+  state.inbox.front = false;
   renderInbox();
   updateBadges();
 }
@@ -162,16 +165,37 @@ function populateInboxDecks(decks) {
   $("inbox-deck").value = state.inbox.deck;
 }
 
+// typed label/value rows for the catalog-entry rail; empty values drop out
+function catalogRows(pairs) {
+  return pairs
+    .filter(([, v]) => v)
+    .map(([k, v]) => `<div class="erow"><span class="ek">${k}</span><span class="ev">${v}</span></div>`)
+    .join("");
+}
+
+function commentBlocks(ch) {
+  if (!ch || !ch.length) return "";
+  return (
+    '<div class="ek ecom">comments</div>' +
+    ch
+      .map(
+        (e) =>
+          `<div class="comment"><div class="when">${(e.date || "").slice(0, 16).replace("T", " ")} · ${escapeHtml(e.author || "")}</div>${escapeHtml(e.text)}</div>`
+      )
+      .join("")
+  );
+}
+
 function renderInbox() {
   const { cards, idx } = state.inbox;
-  const single = document.querySelector("#surface-inbox .single");
+  const desk = $("inbox-desk");
   if (!cards.length) {
-    single.style.display = "none";
+    desk.style.display = "none";
     $("inbox-empty").textContent = state.inbox.deck ? "no cards in this deck" : "inbox empty";
     $("inbox-empty").hidden = false;
     return;
   }
-  single.style.display = "flex";
+  desk.style.display = "flex";
   $("inbox-empty").hidden = true;
   const item = cards[idx];
   const c = item.card;
@@ -193,24 +217,22 @@ function renderInbox() {
           .join("") +
         "</span>"
       : "";
-  $("inbox-meta").innerHTML =
-    `<span>${idx + 1} / ${cards.length}</span>` +
-    `<span class="chip">${escapeHtml(c.note_type)}</span><span class="chip">${escapeHtml(c.deck)}</span>` +
+  $("inbox-bar").innerHTML =
+    `<span class="typed pos">№ ${idx + 1} / ${cards.length}</span>` +
     (subcards.length > 1
-      ? `<span>card ${state.inbox.ord + 1} / ${subcards.length}</span>${pips}` +
-        (sub.name ? `<span class="muted">${sub.name}</span>` : "")
+      ? `<span class="typed">card ${state.inbox.ord + 1}/${subcards.length}${sub.name ? " · " + escapeHtml(sub.name) : ""}</span>${pips}`
       : "") +
-    `<span class="muted">${c.source}</span>` +
-    (c.tags && c.tags.length ? `<span class="muted">${c.tags.join(" ")}</span>` : "") +
-    `<span class="muted">${state.inbox.flipped ? "back" : "front"}</span>`;
-  frameInto($("inbox-frame"), state.inbox.flipped ? sub.answer : sub.question, r.css, true);
-  const ch = c.comment_history || [];
-  $("inbox-comments").innerHTML = ch
-    .map(
-      (e) =>
-        `<div class="comment"><div class="when">${(e.date || "").slice(0, 16).replace("T", " ")} · ${e.author || ""}</div>${escapeHtml(e.text)}</div>`
-    )
-    .join("");
+    `<span class="grow"></span>` +
+    `<span class="chip">${state.inbox.front ? "front only" : "full card"}</span>`;
+  frameInto($("inbox-frame"), state.inbox.front ? sub.question : sub.answer, r.css, true);
+  $("inbox-side").innerHTML =
+    catalogRows([
+      ["deck", escapeHtml(c.deck)],
+      ["type", escapeHtml(c.note_type)],
+      ["tags", (c.tags || []).map(escapeHtml).join(" ")],
+      ["source", escapeHtml(c.source || "")],
+      ["added", (c.created || "").slice(0, 10)],
+    ]) + commentBlocks(c.comment_history);
 }
 
 async function inboxAction(path, okMsg, kind) {
@@ -252,7 +274,7 @@ async function approveCard() {
     const i = (state.inbox.ord + step) % subcards.length;
     if (!approved.has(subcards[i].ordinal)) { state.inbox.ord = i; break; }
   }
-  state.inbox.flipped = false;
+  state.inbox.front = false;
   renderInbox();
   toast("card approved", "ok");
 }
@@ -264,13 +286,13 @@ async function loadRepair() {
     state.repair.cards = [];
     $("repair-empty").textContent = "anki not reachable";
     $("repair-empty").hidden = false;
-    document.querySelector("#surface-repair .single").style.display = "none";
+    $("repair-desk").style.display = "none";
     updateBadges();
     return;
   }
   state.repair.cards = data.cards;
   if (state.repair.idx >= data.cards.length) state.repair.idx = Math.max(0, data.cards.length - 1);
-  state.repair.flipped = false;
+  state.repair.front = false;
   renderRepair();
   updateBadges();
 }
@@ -281,23 +303,27 @@ function flagName(f) {
 
 function renderRepair() {
   const { cards, idx } = state.repair;
-  const single = document.querySelector("#surface-repair .single");
+  const desk = $("repair-desk");
   if (!cards.length) {
-    single.style.display = "none";
+    desk.style.display = "none";
     $("repair-empty").textContent = "no flagged cards";
     $("repair-empty").hidden = false;
     return;
   }
-  single.style.display = "flex";
+  desk.style.display = "flex";
   $("repair-empty").hidden = true;
   const c = cards[idx];
   const pill = c.flag === 1 ? "flag-red" : c.flag === 2 ? "flag-orange" : "";
-  $("repair-meta").innerHTML =
-    `<span>${idx + 1} / ${cards.length}</span>` +
+  $("repair-bar").innerHTML =
+    `<span class="typed pos">№ ${idx + 1} / ${cards.length}</span>` +
     `<span class="flagpill ${pill}">${flagName(c.flag)}</span>` +
-    `<span class="chip">${escapeHtml(c.model)}</span><span class="chip">${escapeHtml(c.deck)}</span>` +
-    `<span class="muted">${state.repair.flipped ? "back" : "front"}</span>`;
-  frameInto($("repair-frame"), state.repair.flipped ? c.answer : c.question, c.css, true);
+    `<span class="grow"></span>` +
+    `<span class="chip">${state.repair.front ? "front only" : "full card"}</span>`;
+  frameInto($("repair-frame"), state.repair.front ? c.question : c.answer, c.css, true);
+  $("repair-side").innerHTML = catalogRows([
+    ["deck", escapeHtml(c.deck)],
+    ["type", escapeHtml(c.model)],
+  ]);
 }
 
 // --- survey ---------------------------------------------------------------
@@ -643,14 +669,14 @@ function exemplarRow(e) {
 
 // --- card preview overlay (render an exemplar / graveyard card as a card) --
 function openCardView(view) {
-  state.cardView = { question: view.question || "", answer: view.answer || "", css: view.css || "", meta: view.meta || "", flipped: false };
+  state.cardView = { question: view.question || "", answer: view.answer || "", css: view.css || "", meta: view.meta || "", front: false };
   renderCardView();
   openOverlay("cardview");
 }
 function renderCardView() {
   const v = state.cardView;
-  $("cardview-meta").innerHTML = v.meta + '<span class="muted">' + (v.flipped ? "back" : "front") + "</span>";
-  frameInto($("cardview-frame"), v.flipped ? v.answer : v.question, v.css, true);
+  $("cardview-meta").innerHTML = v.meta + '<span class="chip">' + (v.front ? "front only" : "full card") + "</span>";
+  frameInto($("cardview-frame"), v.front ? v.question : v.answer, v.css, true);
 }
 
 // --- graveyard ------------------------------------------------------------
@@ -939,7 +965,7 @@ const HELP = [
   ["1-6", "inbox · repair · survey · stats · graveyard · exemplars"],
   ["j / k", "move down / up"],
   ["h / l", "move left / right"],
-  ["space", "flip"],
+  ["space", "front only / full card"],
   ["a", "approve card"],
   ["d", "delete (inbox -> graveyard)"],
   ["c", "comment + send back (inbox)"],
@@ -989,7 +1015,7 @@ function onKey(e) {
   }
   if (!$("cardview").hidden) {
     if (e.key === "Escape") { closeOverlays(); return; }
-    if (e.key === " ") { e.preventDefault(); state.cardView.flipped = !state.cardView.flipped; renderCardView(); }
+    if (e.key === " ") { e.preventDefault(); state.cardView.front = !state.cardView.front; renderCardView(); }
     return;
   }
   if (!$("exemplar-prompt").hidden) {
@@ -1039,22 +1065,22 @@ function onKey(e) {
 
 function inboxKeys(k, e) {
   const s = state.inbox;
-  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.ord = 0; s.flipped = false; renderInbox(); }
-  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.ord = 0; s.flipped = false; renderInbox(); }
-  else if (k === "l" || k === "ArrowRight") { s.ord += 1; s.flipped = false; renderInbox(); }
-  else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.flipped = false; renderInbox(); }
-  else if (k === " ") { e.preventDefault(); s.flipped = !s.flipped; renderInbox(); }
+  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.ord = 0; s.front = false; renderInbox(); }
+  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.ord = 0; s.front = false; renderInbox(); }
+  else if (k === "l" || k === "ArrowRight") { s.ord += 1; s.front = false; renderInbox(); }
+  else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.front = false; renderInbox(); }
+  else if (k === " ") { e.preventDefault(); s.front = !s.front; renderInbox(); }
   else if (k === "a") approveCard();
-  else if (k === "d") inboxAction("delete", "deleted → graveyard", "del");
+  else if (k === "d") inboxAction("delete", "buried", "del");
   else if (k === "c") { e.preventDefault(); openCommenter(); }
   else if (k === "e") { e.preventDefault(); openEditor(); }
 }
 
 function repairKeys(k, e) {
   const s = state.repair;
-  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.flipped = false; renderRepair(); }
-  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.flipped = false; renderRepair(); }
-  else if (k === " ") { e.preventDefault(); s.flipped = !s.flipped; renderRepair(); }
+  if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.front = false; renderRepair(); }
+  else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.front = false; renderRepair(); }
+  else if (k === " ") { e.preventDefault(); s.front = !s.front; renderRepair(); }
   else if (k === "e") { e.preventDefault(); openEditor(); }
 }
 

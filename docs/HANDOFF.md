@@ -113,11 +113,18 @@ Cross-cutting since v1:
   and to exemplar/graveyard previews.
 - **Settings** persist to `config.json` (live cfg updated in place too); the
   Beeminder auth token is write-only from the frontend.
-- **UI is a warm light "paper & ink" theme** (2026-07-01 redesign): white cards
-  sit on warm paper instead of glaring against dark chrome; serif numerals on
-  stats tiles; a bottom key/status bar shows the current surface's bindings
-  (edit `KEYHINTS` in `app.js`). Stats are inline SVG charts with Anki-style
-  hover tooltips and a 1mo/3mo/1yr range toggle.
+- **UI is a card-catalog identity** (2026-07-01 redesign, direction chosen by
+  Alex in a design interview): manila drawer chrome with folder tabs, each card
+  an index card (red top rule, typed "№ n / N"), a typed catalog-entry rail
+  (deck/type/tags/source/added + comments) beside it, American Typewriter for
+  labels, and toasts styled as ink stamps (the one deliberate flourish; ~110ms
+  press-in, reduced-motion respected). A bottom key/status bar shows the
+  current surface's bindings (edit `KEYHINTS` in `app.js`). Stats are inline
+  SVG charts with Anki-style hover tooltips and a 1mo/3mo/1yr range toggle.
+- **Inbox/repair show the FULL card by default** (the rendered answer, which
+  includes `{{FrontSide}}`) — Alex's call: you're judging cards, not studying
+  them. `space` toggles a front-only peek. Same for the exemplar/graveyard
+  preview overlay. He wants motion kept at "micro"; never playful.
 - **Deleting an exemplar appends it to `data/exemplars.jsonl.trash`** — the
   delete button is not undoable via `u`, so the trash file is the recovery
   path (keeps the nothing-hard-deleted invariant true).
