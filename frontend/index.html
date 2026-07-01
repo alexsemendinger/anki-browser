@@ -60,11 +60,25 @@
     <!-- stats -->
     <section id="surface-stats" class="surface" hidden>
       <div id="stats-scroll">
-        <h3 class="muted">calendar · past year</h3>
-        <div id="heatmap"></div>
-        <h3 class="muted">reviews per day · 30 days</h3>
-        <div id="reviews-chart"></div>
-        <div id="stats-grid"></div>
+        <div class="charts">
+          <div class="chartcard">
+            <div class="charthead"><h3>past year</h3><span class="muted" id="hm-total"></span></div>
+            <div id="heatmap"></div>
+          </div>
+          <div class="chartcard">
+            <div class="charthead">
+              <h3>reviews</h3>
+              <div class="seg" id="rev-range">
+                <button data-days="30" class="on">1mo</button>
+                <button data-days="90">3mo</button>
+                <button data-days="365">1yr</button>
+              </div>
+            </div>
+            <div id="reviews-chart"></div>
+            <div class="rev-legend" id="rev-legend"></div>
+          </div>
+          <div id="stats-grid"></div>
+        </div>
       </div>
     </section>
 
@@ -151,6 +165,7 @@
     </div>
   </footer>
 
+  <div id="tip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
   <script src="app.js"></script>

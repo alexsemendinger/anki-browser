@@ -113,6 +113,14 @@ Cross-cutting since v1:
   and to exemplar/graveyard previews.
 - **Settings** persist to `config.json` (live cfg updated in place too); the
   Beeminder auth token is write-only from the frontend.
+- **UI is a warm light "paper & ink" theme** (2026-07-01 redesign): white cards
+  sit on warm paper instead of glaring against dark chrome; serif numerals on
+  stats tiles; a bottom key/status bar shows the current surface's bindings
+  (edit `KEYHINTS` in `app.js`). Stats are inline SVG charts with Anki-style
+  hover tooltips and a 1mo/3mo/1yr range toggle.
+- **Deleting an exemplar appends it to `data/exemplars.jsonl.trash`** — the
+  delete button is not undoable via `u`, so the trash file is the recovery
+  path (keeps the nothing-hard-deleted invariant true).
 
 Invariants that must not break (also in the dev `CLAUDE.md`): AnkiConnect is the
 only write path to the live deck; nothing is hard-deleted; the undo stack ↔ stats

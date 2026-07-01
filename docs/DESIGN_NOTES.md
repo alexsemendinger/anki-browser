@@ -138,7 +138,8 @@ least sure of and could not test.
   can't (not currently needed).
 - **Nothing is hard-deleted by the tool.** Inbox delete moves the file to the
   graveyard. Exemplar/stat/undo "pops" only ever remove the most recent entry
-  for an immediate undo.
+  for an immediate undo. Deleting an exemplar from its surface appends the
+  removed row to `exemplars.jsonl.trash`.
 - **Exemplar snapshots are frozen content, not note references.** Never resolve
   an exemplar back through a live note id at display time; that reintroduces the
   exact bug the spec calls out (a now-good card reading as bad).

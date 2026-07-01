@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from backend import inbox
@@ -410,3 +412,13 @@ def test_exemplar_list_has_idx_and_delete(client):
 
 def test_exemplar_delete_out_of_range_404(client):
     assert client.post("/api/exemplars/9/delete").status_code == 404
+
+
+def test_exemplar_delete_lands_in_trash(client):
+    client.post("/api/exemplar", json={"verdict": "bad", "note_type": "Basic", "fields": {"Front": "Q"}, "rendered": {}})
+    client.post("/api/exemplars/0/delete")
+    with open(client.cfg["paths"]["exemplars"] + ".trash", encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh if line.strip()]
+    assert len(rows) == 1
+    assert rows[0]["exemplar"]["verdict"] == "bad"
+    assert rows[0]["deleted"]

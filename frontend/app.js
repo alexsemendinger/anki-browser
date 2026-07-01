@@ -13,6 +13,9 @@ const state = {
   graveyard: [],
   cardView: null,
   targetAnnounced: false,
+  statsRange: 30,
+  statsData: null,
+  statsDays: null,
 };
 
 // --- api ------------------------------------------------------------------
@@ -192,7 +195,7 @@ function renderInbox() {
       : "";
   $("inbox-meta").innerHTML =
     `<span>${idx + 1} / ${cards.length}</span>` +
-    `<span>${c.note_type}</span><span>${c.deck}</span>` +
+    `<span class="chip">${escapeHtml(c.note_type)}</span><span class="chip">${escapeHtml(c.deck)}</span>` +
     (subcards.length > 1
       ? `<span>card ${state.inbox.ord + 1} / ${subcards.length}</span>${pips}` +
         (sub.name ? `<span class="muted">${sub.name}</span>` : "")
@@ -292,7 +295,7 @@ function renderRepair() {
   $("repair-meta").innerHTML =
     `<span>${idx + 1} / ${cards.length}</span>` +
     `<span class="flagpill ${pill}">${flagName(c.flag)}</span>` +
-    `<span>${c.model}</span><span>${c.deck}</span>` +
+    `<span class="chip">${escapeHtml(c.model)}</span><span class="chip">${escapeHtml(c.deck)}</span>` +
     `<span class="muted">${state.repair.flipped ? "back" : "front"}</span>`;
   frameInto($("repair-frame"), state.repair.flipped ? c.answer : c.question, c.css, true);
 }
@@ -416,8 +419,45 @@ function utcMidnight(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+const dayKey = (dt) => dt.toISOString().slice(0, 10);
+const fmtDay = (key, opts) =>
+  new Date(key + "T00:00:00Z").toLocaleDateString(undefined, { timeZone: "UTC", ...opts });
+
+// [event type, legend label, css color var]; stacking order bottom-up
+const SERIES = [
+  ["approve", "approve", "--c-approve"],
+  ["repair", "repair", "--c-repair"],
+  ["send_back", "send back", "--c-sendback"],
+  ["delete", "delete", "--c-delete"],
+];
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// --- shared chart tooltip ---------------------------------------------------
+function tipShow(html, cx, cy) {
+  const t = $("tip");
+  t.innerHTML = html;
+  t.hidden = false;
+  const r = t.getBoundingClientRect();
+  t.style.left = Math.min(cx + 14, window.innerWidth - r.width - 8) + "px";
+  t.style.top = Math.min(cy + 14, window.innerHeight - r.height - 8) + "px";
+}
+function tipHide() {
+  $("tip").hidden = true;
+}
+function tipHtml(head, total, rows) {
+  return (
+    `<div class="tip-head"><span>${head}</span><span>${total}</span></div>` +
+    rows
+      .map(
+        ([sw, label, n]) =>
+          `<div class="tip-row">${sw ? `<span class="sw" style="background:${sw}"></span>` : ""}<span>${label}</span><span class="num">${n}</span></div>`
+      )
+      .join("")
+  );
+}
+
 // GitHub-style heatmap: one cell per day for the trailing ~year, coloured by
-// how many cards were processed that day.
+// how many cards were processed that day. Hover for the exact date + count.
 function renderHeatmap(daily) {
   const counts = {};
   daily.forEach((d) => (counts[d.day] = dayTotal(d)));
@@ -428,12 +468,21 @@ function renderHeatmap(daily) {
   const level = (n) => (n === 0 ? 0 : n < 10 ? 1 : n < 25 ? 2 : n < 50 ? 3 : 4);
   const cur = new Date(start);
   const weeks = [];
+  const months = [];
+  let lastMonth = cur.getUTCMonth();
+  let total = 0;
   while (cur <= end) {
+    if (cur.getUTCMonth() !== lastMonth) {
+      months.push([weeks.length, fmtDay(dayKey(cur), { month: "short" })]);
+      lastMonth = cur.getUTCMonth();
+    }
     const week = [];
     for (let i = 0; i < 7; i++) {
       if (cur <= end) {
-        const key = cur.toISOString().slice(0, 10);
-        week.push(`<div class="hm-cell l${level(counts[key] || 0)}" title="${key}: ${counts[key] || 0}"></div>`);
+        const key = dayKey(cur);
+        const n = counts[key] || 0;
+        total += n;
+        week.push(`<div class="hm-cell l${level(n)}" data-day="${key}" data-n="${n}"></div>`);
         cur.setUTCDate(cur.getUTCDate() + 1);
       } else {
         week.push('<div class="hm-cell empty"></div>');
@@ -441,40 +490,108 @@ function renderHeatmap(daily) {
     }
     weeks.push(`<div class="hm-week">${week.join("")}</div>`);
   }
-  const days = ["S", "M", "T", "W", "T", "F", "S"].map((d) => `<span>${d}</span>`).join("");
-  $("heatmap").innerHTML = `<div class="hm-days">${days}</div><div class="hm-weeks">${weeks.join("")}</div>`;
+  const PITCH = 14; // cell 11px + 3px gap
+  const monthLabels = months.map(([w, m]) => `<span style="left:${w * PITCH}px">${m}</span>`).join("");
+  const dayLabels = ["S", "M", "T", "W", "T", "F", "S"].map((d) => `<span>${d}</span>`).join("");
+  $("heatmap").innerHTML =
+    `<div class="hm"><div class="hm-months">${monthLabels}</div>` +
+    `<div class="hm-body"><div class="hm-days">${dayLabels}</div><div class="hm-weeks">${weeks.join("")}</div></div></div>`;
+  $("hm-total").textContent = total ? `${total} reviews` : "";
 }
 
-// Stacked bars, one per day for the last 30 days, split by action type.
+// Stacked daily bars + cumulative line over the selected range (1mo/3mo/1yr).
+// Hover anywhere on a day's column for the per-type breakdown.
 function renderReviews(daily) {
+  const el = $("reviews-chart");
+  const range = state.statsRange;
   const by = {};
   daily.forEach((d) => (by[d.day] = d));
   const end = utcMidnight(new Date());
   const days = [];
-  for (let i = 29; i >= 0; i--) {
+  for (let i = range - 1; i >= 0; i--) {
     const dt = new Date(end);
     dt.setUTCDate(dt.getUTCDate() - i);
-    const key = dt.toISOString().slice(0, 10);
-    const d = by[key] || {};
-    days.push({ key, approve: d.approve || 0, delete: d.delete || 0, repair: d.repair || 0, send_back: d.send_back || 0 });
+    const d = by[dayKey(dt)] || {};
+    days.push({
+      key: dayKey(dt),
+      approve: d.approve || 0, delete: d.delete || 0,
+      repair: d.repair || 0, send_back: d.send_back || 0,
+    });
   }
-  const max = Math.max(1, ...days.map(dayTotal));
-  const H = 140;
-  const seg = (n, cls) => (n ? `<div class="rev-seg ${cls}" style="height:${(n / max) * H}px"></div>` : "");
-  const bars = days
-    .map((d) =>
-      `<div class="rev-col" title="${d.key} · ${dayTotal(d)} (a${d.approve} d${d.delete} r${d.repair} s${d.send_back})">` +
-      seg(d.approve, "approve") + seg(d.repair, "repair") + seg(d.send_back, "sendback") + seg(d.delete, "delete") +
-      `</div>`
-    )
+  const cum = [];
+  let run = 0;
+  days.forEach((d) => cum.push((run += dayTotal(d))));
+  state.statsDays = { days, cum };
+
+  const W = el.clientWidth || 900, H = 210;
+  const padL = 34, padR = 42, padT = 10, padB = 22;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  // round up to 2/4/6/8/10 × a power of ten, so the midpoint tick is whole
+  const nice = (n) => {
+    const p = 10 ** Math.floor(Math.log10(Math.max(2, n)));
+    for (const m of [2, 4, 6, 8, 10]) if (m * p >= n) return m * p;
+    return 10 * p;
+  };
+  const yMax = nice(Math.max(1, ...days.map(dayTotal)));
+  const cMax = nice(Math.max(1, run));
+  const x = (i) => padL + (i + 0.5) * (iw / days.length);
+  const bw = Math.max(1, (iw / days.length) * 0.72);
+  const y = (v) => padT + ih - (v / yMax) * ih;
+  const yc = (v) => padT + ih - (v / cMax) * ih;
+  const colors = Object.fromEntries(SERIES.map(([t, , v]) => [t, cssVar(v)]));
+
+  let grid = "";
+  for (const f of [0, 0.5, 1]) {
+    const gy = padT + ih - f * ih;
+    grid +=
+      `<line class="gridline" x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}"/>` +
+      `<text class="ax" x="${padL - 6}" y="${gy + 3}" text-anchor="end">${f * yMax}</text>` +
+      `<text class="ax" x="${W - padR + 6}" y="${gy + 3}" text-anchor="start">${f * cMax}</text>`;
+  }
+
+  let bars = "";
+  days.forEach((d, i) => {
+    let acc = 0;
+    for (const [typ] of SERIES) {
+      const v = d[typ];
+      if (!v) continue;
+      bars += `<rect x="${x(i) - bw / 2}" y="${y(acc + v)}" width="${bw}" height="${y(acc) - y(acc + v)}" fill="${colors[typ]}"/>`;
+      acc += v;
+    }
+  });
+
+  let cumul = "";
+  if (run > 0) {
+    const pts = days.map((d, i) => `${x(i)},${yc(cum[i])}`).join(" ");
+    cumul =
+      `<polygon points="${x(0)},${padT + ih} ${pts} ${x(days.length - 1)},${padT + ih}" fill="${cssVar("--c-cumul")}" opacity="0.18"/>` +
+      `<polyline points="${pts}" fill="none" stroke="${cssVar("--c-cumul")}" stroke-width="1.5"/>`;
+  }
+
+  let xlab = "";
+  days.forEach((d, i) => {
+    let lab = null;
+    if (range === 365) {
+      if (d.key.slice(8) === "01") lab = fmtDay(d.key, { month: "short" });
+    } else if ((days.length - 1 - i) % (range === 90 ? 15 : 7) === 0) {
+      lab = fmtDay(d.key, { month: "short", day: "numeric" });
+    }
+    if (lab) xlab += `<text class="ax" x="${x(i)}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+  });
+
+  const hover = days
+    .map((_, i) => `<rect x="${padL + i * (iw / days.length)}" y="${padT}" width="${iw / days.length}" height="${ih}" fill="transparent" data-i="${i}"/>`)
     .join("");
-  $("reviews-chart").innerHTML =
-    `<div class="rev-bars" style="height:${H}px">${bars}</div>` +
-    `<div class="rev-legend"><span class="ll approve">approve</span><span class="ll repair">repair</span><span class="ll sendback">send back</span><span class="ll delete">delete</span><span class="muted">peak ${max}/day</span></div>`;
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${grid}${cumul}${bars}${xlab}${hover}</svg>`;
+  $("rev-legend").innerHTML =
+    SERIES.map(([, label, v]) => `<span class="ll" style="--sw:${cssVar(v)}">${label}</span>`).join("") +
+    `<span class="ll" style="--sw:${cssVar("--c-cumul")}">cumulative</span>`;
 }
 
 async function loadStats() {
   const s = await api.get("/api/stats");
+  state.statsData = s;
   renderHeatmap(s.daily || []);
   renderReviews(s.daily || []);
   const tiles = [
@@ -668,6 +785,8 @@ function openOverlay(id) {
 }
 function closeOverlays() {
   document.querySelectorAll(".overlay").forEach((o) => (o.hidden = true));
+  // a hidden overlay's input can keep focus and swallow the next keypress
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   setMode("normal");
 }
 
@@ -1009,6 +1128,45 @@ $("inbox-deck").addEventListener("change", () => {
   state.inbox.deck = $("inbox-deck").value;
   state.inbox.idx = 0;
   loadInbox();
+});
+
+// stats: range toggle, chart tooltips, re-render on resize
+$("rev-range").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button");
+  if (!btn) return;
+  state.statsRange = +btn.dataset.days;
+  $("rev-range").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === btn));
+  if (state.statsData) renderReviews(state.statsData.daily || []);
+});
+$("heatmap").addEventListener("mousemove", (ev) => {
+  const c = ev.target.closest(".hm-cell");
+  if (!c || !c.dataset.day) return tipHide();
+  tipShow(
+    tipHtml(fmtDay(c.dataset.day, { weekday: "long", month: "long", day: "numeric", year: "numeric" }), "",
+      [[null, "reviews", c.dataset.n]]),
+    ev.clientX, ev.clientY
+  );
+});
+$("heatmap").addEventListener("mouseleave", tipHide);
+$("reviews-chart").addEventListener("mousemove", (ev) => {
+  const r = ev.target.closest("[data-i]");
+  if (!r || !state.statsDays) return tipHide();
+  const i = +r.dataset.i;
+  const d = state.statsDays.days[i];
+  const rows = SERIES.map(([t, label, v]) => [cssVar(v), label, d[t]]);
+  rows.push([cssVar("--c-cumul"), "running total", state.statsDays.cum[i]]);
+  tipShow(
+    tipHtml(fmtDay(d.key, { weekday: "short", month: "short", day: "numeric" }), dayTotal(d), rows),
+    ev.clientX, ev.clientY
+  );
+});
+$("reviews-chart").addEventListener("mouseleave", tipHide);
+let resizeT = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    if (state.surface === "stats" && state.statsData) renderReviews(state.statsData.daily || []);
+  }, 150);
 });
 
 // card iframes forward their keystrokes here (see cardDoc) so shortcuts keep

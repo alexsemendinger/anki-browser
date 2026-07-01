@@ -18,8 +18,9 @@ each area.
   enters the inbox (e.g. from `add_card.py`); no historical data, forward-only.
 - [ ] **Queue size per day** (to see if the backlog is growing/shrinking). Needs
   a daily snapshot of inbox count; no historical data, forward-only.
-- [ ] Time-range toggles on the charts (1mo / 3mo / 1yr), a cumulative line, and
-  year navigation on the heatmap — polish, later.
+- [x] Time-range toggles (1mo / 3mo / 1yr), cumulative line, and Anki-style
+  hover tooltips on both charts — done 2026-07-01.
+- [ ] Year navigation on the heatmap — polish, later.
 
 ## Exemplars
 - [x] **Comment / "why" when marking an exemplar** — done 2026-07-01. Pressing
