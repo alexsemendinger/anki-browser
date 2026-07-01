@@ -9,19 +9,14 @@
 <body>
   <header id="topbar">
     <nav id="tabs">
-      <button data-surface="inbox" class="tab active">1 inbox <span class="badge" id="inbox-badge"></span></button>
-      <button data-surface="repair" class="tab">2 repair <span class="badge" id="repair-badge"></span></button>
-      <button data-surface="survey" class="tab">3 survey</button>
-      <button data-surface="stats" class="tab">4 stats</button>
-      <button data-surface="graveyard" class="tab">5 graveyard <span class="badge" id="graveyard-badge"></span></button>
-      <button data-surface="exemplars" class="tab">6 exemplars</button>
+      <button data-surface="inbox" class="tab active"><kbd>1</kbd>inbox <span class="badge" id="inbox-badge"></span></button>
+      <button data-surface="repair" class="tab"><kbd>2</kbd>repair <span class="badge" id="repair-badge"></span></button>
+      <button data-surface="survey" class="tab"><kbd>3</kbd>survey</button>
+      <button data-surface="stats" class="tab"><kbd>4</kbd>stats</button>
+      <button data-surface="graveyard" class="tab"><kbd>5</kbd>graveyard <span class="badge" id="graveyard-badge"></span></button>
+      <button data-surface="exemplars" class="tab"><kbd>6</kbd>exemplars</button>
     </nav>
-    <div id="topright">
-      <button id="settings-btn" class="iconbtn" title="settings ( , )">⚙</button>
-      <span id="session" class="muted"></span>
-      <span id="anki-dot" class="dot" title="Anki"></span>
-      <span id="mode" class="mode">NORMAL</span>
-    </div>
+    <button id="settings-btn" class="iconbtn" title="settings ( , )">⚙</button>
   </header>
 
   <main id="main">
@@ -146,6 +141,15 @@
       <div class="hint muted">? or Esc close</div>
     </div>
   </div>
+
+  <footer id="keybar">
+    <div id="keys"></div>
+    <div id="statusright">
+      <span id="session"></span>
+      <span id="anki-dot" class="dot" title="Anki"></span>
+      <span id="mode" class="mode">NORMAL</span>
+    </div>
+  </footer>
 
   <div id="toast" class="toast" hidden></div>
 

@@ -41,8 +41,9 @@ function toast(msg, kind) {
 function cardDoc(html, css, withMath) {
   const mj =
     "window.MathJax={tex:{inlineMath:[['\\\\(','\\\\)']],displayMath:[['\\\\[','\\\\]']]},svg:{fontCache:'global'}};";
+  // async so a slow/offline CDN can't block the card body from parsing
   const head = withMath
-    ? `<script>${mj}</script><script src="${state.config.mathjax_url}"></script>`
+    ? `<script>${mj}</script><script src="${state.config.mathjax_url}" async></script>`
     : "";
   // A sandboxed iframe traps focus, so a click on the card would otherwise
   // swallow keystrokes and the shortcuts stop working. Forward keydowns to the
@@ -70,6 +71,24 @@ function setMode(mode) {
   el.classList.toggle("insert", mode === "insert");
 }
 
+// per-surface keybindings for the bottom bar; global keys after the ·
+const KEYHINTS = {
+  inbox: [["space", "flip"], ["j/k", "card"], ["h/l", "subcard"], ["a", "approve"], ["d", "delete"], ["c", "send back"], ["e", "edit"]],
+  repair: [["space", "flip"], ["j/k", "card"], ["e", "edit"]],
+  survey: [["hjkl", "move"], ["space", "flip"], ["f", "flip all"]],
+  stats: [],
+  graveyard: [["click", "preview"]],
+  exemplars: [["click", "preview"]],
+};
+const KEYHINTS_GLOBAL = [["g", "exemplar"], ["u", "undo"], ["?", "help"]];
+
+function renderKeybar(name) {
+  const hints = (KEYHINTS[name] || []).concat(KEYHINTS_GLOBAL);
+  $("keys").innerHTML = hints
+    .map(([k, v]) => `<span class="hintk"><kbd>${k}</kbd>${v}</span>`)
+    .join("");
+}
+
 function setSurface(name) {
   state.surface = name;
   document.querySelectorAll(".surface").forEach((s) => (s.hidden = true));
@@ -77,6 +96,7 @@ function setSurface(name) {
   document.querySelectorAll(".tab").forEach((t) =>
     t.classList.toggle("active", t.dataset.surface === name)
   );
+  renderKeybar(name);
   if (name === "inbox") loadInbox();
   if (name === "repair") loadRepair();
   if (name === "survey") loadSurvey(true);
@@ -281,7 +301,7 @@ function renderRepair() {
 async function loadDecks() {
   const data = await api.get("/api/decks");
   const sel = $("f-deck");
-  sel.innerHTML = '<option value="">deck</option>' + data.decks.map((d) => `<option>${d}</option>`).join("");
+  sel.innerHTML = '<option value="">deck</option>' + data.decks.map((d) => `<option>${escapeHtml(d)}</option>`).join("");
 }
 
 function hasSurveyScope() {
