@@ -168,10 +168,16 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .stat .n { font-size: 26px; }
 .stat .k { color: var(--muted); font-size: 12px; }
 #exemplar-list { padding: 0 0 20px; }
-.ex { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); padding: 6px 0; }
+.ex { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.ex-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
 .ex .v { padding: 1px 7px; border-radius: 9px; font-size: 11px; color: #111; }
 .ex .good { background: var(--green); }
 .ex .bad { background: var(--red); }
+.ex-del { margin-left: auto; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
+.ex-del:hover { border-color: var(--red); color: var(--fg); }
+.ex-field { font-size: 13px; margin: 3px 0; }
+.ex-fname { color: var(--muted); font-size: 11px; margin-right: 6px; }
+.ex-comment { margin-top: 6px; border-left: 2px solid var(--accent); padding: 2px 10px; color: var(--muted); font-size: 12px; }
 
 /* overlays */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 20; }

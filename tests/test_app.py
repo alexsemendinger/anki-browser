@@ -396,3 +396,17 @@ def test_inbox_filters_by_deck(client):
     prog = client.get("/api/inbox?deck=Programming").get_json()
     assert prog["count"] == 2 and prog["total"] == 3  # count filtered, total is whole queue
     assert all(c["card"]["deck"] == "Programming" for c in prog["cards"])
+
+
+def test_exemplar_list_has_idx_and_delete(client):
+    client.post("/api/exemplar", json={"verdict": "good", "note_type": "Basic", "fields": {"Front": "Q"}, "rendered": {}})
+    client.post("/api/exemplar", json={"verdict": "bad", "note_type": "Basic", "fields": {"Front": "R"}, "rendered": {}})
+    lst = client.get("/api/exemplars").get_json()
+    assert lst["count"] == 2
+    assert sorted(e["_idx"] for e in lst["exemplars"]) == [0, 1]
+    assert client.post("/api/exemplars/0/delete").get_json()["ok"] is True
+    assert client.get("/api/exemplars").get_json()["count"] == 1
+
+
+def test_exemplar_delete_out_of_range_404(client):
+    assert client.post("/api/exemplars/9/delete").status_code == 404

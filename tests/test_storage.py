@@ -154,3 +154,13 @@ def test_inbox_sends_commented_card_to_bottom(cfg):
     assert [c["id"] for c in inbox.list_cards(d)] == ["a", "b"]
     inbox.add_comment(d, "a", "needs work")  # comment dated "now" -> a sinks
     assert [c["id"] for c in inbox.list_cards(d)] == ["b", "a"]
+
+
+def test_exemplars_delete_at(cfg):
+    f = cfg["paths"]["exemplars"]
+    for v in ["a", "b", "c"]:
+        exemplars.add(f, verdict="good", fields={"Front": v}, rendered={}, note_type="Basic")
+    removed = exemplars.delete_at(f, 1)
+    assert removed["fields"]["Front"] == "b"
+    assert [r["fields"]["Front"] for r in exemplars.list_all(f)] == ["a", "c"]
+    assert exemplars.delete_at(f, 9) is None

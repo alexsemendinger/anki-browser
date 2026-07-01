@@ -468,13 +468,29 @@ async function loadStats() {
     .map(([k, n]) => `<div class="stat"><div class="n">${n}</div><div class="k">${k}</div></div>`)
     .join("");
   const ex = await api.get("/api/exemplars");
-  $("exemplar-list").innerHTML = ex.exemplars
-    .map((e) => {
-      const first = Object.values(e.fields || {})[0] || "";
-      const snip = escapeHtml(stripTags(first)).slice(0, 90);
-      return `<div class="ex"><span class="v ${e.verdict}">${e.verdict}</span><span class="muted">${(e.date || "").slice(0, 10)}</span><span>${snip}</span></div>`;
-    })
+  $("exemplar-list").innerHTML = ex.exemplars.length
+    ? ex.exemplars.map(exemplarCard).join("")
+    : '<div class="empty">no exemplars yet</div>';
+}
+
+function exemplarCard(e) {
+  const when = (e.date || "").slice(0, 10);
+  // question-ish fields first so the front reads before the back
+  const order = Object.keys(e.fields || {}).sort(
+    (a, b) => (/^(front|text|question)/i.test(a) ? 0 : 1) - (/^(front|text|question)/i.test(b) ? 0 : 1)
+  );
+  const fields = order
+    .map((k) => `<div class="ex-field"><span class="ex-fname">${escapeHtml(k)}</span> ${escapeHtml(stripTags(String(e.fields[k] || ""))).slice(0, 400)}</div>`)
     .join("");
+  const comment = e.comment ? `<div class="ex-comment">${escapeHtml(e.comment)}</div>` : "";
+  return (
+    `<div class="ex">` +
+    `<div class="ex-head"><span class="v ${e.verdict}">${e.verdict}</span>` +
+    `<span class="muted">${escapeHtml(e.deck || "")}</span><span class="muted">${escapeHtml(e.note_type || "")}</span>` +
+    `<span class="muted">${when}</span><button class="ex-del" data-idx="${e._idx}">delete</button></div>` +
+    fields + comment +
+    `</div>`
+  );
 }
 
 // --- graveyard ------------------------------------------------------------
@@ -887,6 +903,13 @@ $("f-apply").addEventListener("click", () => loadSurvey(true));
 $("f-flip").addEventListener("click", toggleFlipAll);
 document.addEventListener("keydown", onKey);
 $("settings-btn").addEventListener("click", openSettings);
+$("exemplar-list").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".ex-del");
+  if (!btn) return;
+  const res = await api.send(`/api/exemplars/${btn.dataset.idx}/delete`, "POST", {});
+  if (res.ok) { toast("exemplar deleted", "del"); await loadStats(); }
+  else toast(res.data.error || "failed");
+});
 $("inbox-deck").addEventListener("change", () => {
   state.inbox.deck = $("inbox-deck").value;
   state.inbox.idx = 0;

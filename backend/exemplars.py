@@ -49,7 +49,22 @@ def pop_last(exemplar_file):
     if not rows:
         return None
     last = rows.pop()
+    _rewrite(exemplar_file, rows)
+    return last
+
+
+def delete_at(exemplar_file, index):
+    """Delete the snapshot at `index` (its position in the file). Returns the
+    removed row, or None if the index is out of range."""
+    rows = list_all(exemplar_file)
+    if index < 0 or index >= len(rows):
+        return None
+    removed = rows.pop(index)
+    _rewrite(exemplar_file, rows)
+    return removed
+
+
+def _rewrite(exemplar_file, rows):
     with open(exemplar_file, "w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    return last

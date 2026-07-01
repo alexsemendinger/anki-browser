@@ -366,8 +366,17 @@ def create_app(cfg=None):
     @app.get("/api/exemplars")
     def exemplar_list():
         rows = exemplars.list_all(paths["exemplars"])
-        rows.reverse()
+        for i, row in enumerate(rows):
+            row["_idx"] = i  # file position, so the UI can delete a specific one
+        rows.reverse()  # newest first
         return jsonify({"exemplars": rows, "count": len(rows)})
+
+    @app.post("/api/exemplars/<int:idx>/delete")
+    def exemplar_delete(idx):
+        removed = exemplars.delete_at(paths["exemplars"], idx)
+        if removed is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"ok": True})
 
     # --- undo ------------------------------------------------------------
     @app.post("/api/undo")

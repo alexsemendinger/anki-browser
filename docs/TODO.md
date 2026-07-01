@@ -25,7 +25,10 @@ each area.
 - [ ] **Prompt for a reason/comment when marking an exemplar.** Backend already
   stores a `comment` field (`exemplars.add(..., comment=...)`); the UI just sends
   `comment: ""`. So this is a small frontend add.
-- [ ] **A view to see / edit / delete the exemplar list** (none exists yet).
+- [x] **See / delete the exemplar list** — done 2026-07-01. Stats tab shows each
+  exemplar with both fields (front first), verdict, deck, comment, + a delete
+  button (`/api/exemplars/<idx>/delete`). *Editing* an exemplar in place is still
+  TODO.
 - [ ] Consider folding a send-back comment into an exemplar — several send-back
   comments were really "this is a good/bad example because…".
 
