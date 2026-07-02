@@ -141,11 +141,23 @@ async function pollStatus() {
   }
 }
 
+// --- catalog numbers --------------------------------------------------------
+// A card gets its № the first time it crosses the desk this sitting and keeps
+// it while it's in the queue (a sent-back card keeps its number at the bottom).
+// The № therefore advances as you work instead of reading "1" forever.
+const catalogSeq = { map: new Map(), next: 1 };
+function assignSeq(ids) {
+  ids.forEach((id) => {
+    if (!catalogSeq.map.has(id)) catalogSeq.map.set(id, catalogSeq.next++);
+  });
+}
+
 // --- inbox ----------------------------------------------------------------
 async function loadInbox() {
   const q = state.inbox.deck ? "?deck=" + encodeURIComponent(state.inbox.deck) : "";
   const data = await api.get("/api/inbox" + q);
   state.inbox.cards = data.cards;
+  assignSeq(data.cards.map((i) => "i:" + i.card.id));
   populateInboxDecks(data.decks || {});
   if (state.inbox.idx >= data.cards.length) state.inbox.idx = Math.max(0, data.cards.length - 1);
   state.inbox.ord = 0;
@@ -218,7 +230,8 @@ function renderInbox() {
         "</span>"
       : "";
   $("inbox-bar").innerHTML =
-    `<span class="typed pos">№ ${idx + 1} / ${cards.length}</span>` +
+    `<span class="typed pos">№ ${catalogSeq.map.get("i:" + c.id)}</span>` +
+    `<span class="typed">${cards.length} in queue</span>` +
     (subcards.length > 1
       ? `<span class="typed">card ${state.inbox.ord + 1}/${subcards.length}${sub.name ? " · " + escapeHtml(sub.name) : ""}</span>${pips}`
       : "") +
@@ -291,6 +304,7 @@ async function loadRepair() {
     return;
   }
   state.repair.cards = data.cards;
+  assignSeq(data.cards.map((c) => "r:" + c.card_id));
   if (state.repair.idx >= data.cards.length) state.repair.idx = Math.max(0, data.cards.length - 1);
   state.repair.front = false;
   renderRepair();
@@ -315,7 +329,8 @@ function renderRepair() {
   const c = cards[idx];
   const pill = c.flag === 1 ? "flag-red" : c.flag === 2 ? "flag-orange" : "";
   $("repair-bar").innerHTML =
-    `<span class="typed pos">№ ${idx + 1} / ${cards.length}</span>` +
+    `<span class="typed pos">№ ${catalogSeq.map.get("r:" + c.card_id)}</span>` +
+    `<span class="typed">${cards.length} flagged</span>` +
     `<span class="flagpill ${pill}">${flagName(c.flag)}</span>` +
     `<span class="grow"></span>` +
     `<span class="chip">${state.repair.front ? "front only" : "full card"}</span>`;
@@ -1071,7 +1086,7 @@ function inboxKeys(k, e) {
   else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.front = false; renderInbox(); }
   else if (k === " ") { e.preventDefault(); s.front = !s.front; renderInbox(); }
   else if (k === "a") approveCard();
-  else if (k === "d") inboxAction("delete", "buried", "del");
+  else if (k === "d") inboxAction("delete", "deleted", "del");
   else if (k === "c") { e.preventDefault(); openCommenter(); }
   else if (k === "e") { e.preventDefault(); openEditor(); }
 }
