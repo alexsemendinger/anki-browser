@@ -687,16 +687,48 @@ async function loadExemplars() {
 
 function exemplarRow(e) {
   const front = escapeHtml(stripTags(frontText(e.fields))).slice(0, 150);
-  const comment = e.comment ? `<span class="ex-cmt">${escapeHtml(e.comment).slice(0, 120)}</span>` : "";
+  const comment = e.comment ? `<div class="ex-cmt">${escapeHtml(e.comment)}</div>` : "";
   return (
     `<div class="ex" data-idx="${e._idx}">` +
+    `<div class="ex-main">` +
     `<span class="v ${e.verdict}">${e.verdict}</span>` +
     `<span class="ex-front">${front}</span>` +
-    comment +
     `<span class="muted ex-deck">${escapeHtml(e.deck || "")}</span>` +
+    `<button class="ex-edit" data-idx="${e._idx}">${e.comment ? "edit" : "comment"}</button>` +
     `<button class="ex-del" data-idx="${e._idx}">delete</button>` +
+    `</div>` +
+    comment +
     `</div>`
   );
+}
+
+// swap the comment (or its empty slot) for a textarea; Ctrl+Enter saves, Esc cancels
+function editExemplarComment(idx) {
+  const row = $("exemplar-list").querySelector(`.ex[data-idx="${idx}"]`);
+  const e = state.exemplars.find((x) => String(x._idx) === String(idx));
+  if (!row || !e || row.querySelector("textarea")) return;
+  let slot = row.querySelector(".ex-cmt");
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.className = "ex-cmt";
+    row.appendChild(slot);
+  }
+  const ta = document.createElement("textarea");
+  ta.className = "ex-cmt-edit";
+  ta.value = e.comment || "";
+  slot.replaceChildren(ta);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  ta.addEventListener("keydown", async (ev) => {
+    ev.stopPropagation(); // keep the global handler's Escape-blur out of this
+    if (ev.key === "Escape") { loadExemplars(); return; }
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      const res = await api.send(`/api/exemplars/${idx}/comment`, "POST", { text: ta.value.trim() });
+      toast(res.ok ? "comment saved" : res.data.error || "failed", res.ok ? "ok" : undefined);
+      await loadExemplars();
+    }
+  });
 }
 
 // --- card preview overlay (render an exemplar / graveyard card as a card) --
@@ -822,6 +854,7 @@ function historyDetail(r) {
   const p = r.payload || {};
   if (r.kind === "approve") return stripTags(frontText((p.card || {}).fields));
   if (r.kind === "repair") return stripTags(frontText(p.old_fields));
+  if (r.kind === "edit_exemplar") return p.new || "(cleared) was: " + p.old;
   return p.card_id || "";
 }
 
@@ -1190,8 +1223,10 @@ function inboxKeys(k, e) {
   const s = state.inbox;
   if (k === "j" || k === "ArrowDown") { s.idx = Math.min(s.idx + 1, s.cards.length - 1); s.ord = 0; s.front = false; renderInbox(); }
   else if (k === "k" || k === "ArrowUp") { s.idx = Math.max(s.idx - 1, 0); s.ord = 0; s.front = false; renderInbox(); }
-  else if (k === "l" || k === "ArrowRight") { s.ord += 1; s.front = false; renderInbox(); }
-  else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; s.front = false; renderInbox(); }
+  // paging subcards (h/l) keeps the front-only/full-card view; moving to a
+  // different card (j/k) resets to the full-card default
+  else if (k === "l" || k === "ArrowRight") { s.ord += 1; renderInbox(); }
+  else if (k === "h" || k === "ArrowLeft") { s.ord -= 1; renderInbox(); }
   else if (k === " ") { e.preventDefault(); s.front = !s.front; renderInbox(); }
   else if (k === "a") approveCard();
   else if (k === "d") inboxAction("delete", "deleted", "del");
@@ -1262,6 +1297,10 @@ $("exemplar-list").addEventListener("click", async (ev) => {
     else toast(res.data.error || "failed");
     return;
   }
+  const edit = ev.target.closest(".ex-edit");
+  if (edit) { editExemplarComment(edit.dataset.idx); return; }
+  const cmt = ev.target.closest(".ex-cmt");
+  if (cmt) { editExemplarComment(ev.target.closest(".ex").dataset.idx); return; }
   const row = ev.target.closest(".ex");
   if (!row) return;
   const e = state.exemplars.find((x) => String(x._idx) === row.dataset.idx);

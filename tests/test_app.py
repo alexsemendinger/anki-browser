@@ -214,6 +214,33 @@ def test_inbox_exemplar_without_comment_leaves_card_alone(client):
     assert client.get("/api/exemplars").get_json()["count"] == 0
 
 
+def test_exemplar_comment_edit_and_undo(client):
+    from backend import exemplars as ex_mod
+
+    payload = {
+        "verdict": "bad",
+        "note_type": "Basic",
+        "fields": {"Front": "Q"},
+        "rendered": {"question": "Q", "answer": "A", "css": ""},
+        "comment": "meh",
+    }
+    client.post("/api/exemplar", json=payload)
+    res = client.post("/api/exemplars/0/comment", json={"text": "actually: too vague"})
+    assert res.get_json()["ok"] is True
+    rows = ex_mod.list_all(client.cfg["paths"]["exemplars"])
+    assert rows[0]["comment"] == "actually: too vague"
+
+    # undo restores the old comment (matched by date, not file index)
+    undone = client.post("/api/undo").get_json()
+    assert undone["undone"] == "exemplar comment"
+    rows = ex_mod.list_all(client.cfg["paths"]["exemplars"])
+    assert rows[0]["comment"] == "meh"
+
+    # a no-change save records nothing
+    client.post("/api/exemplars/0/comment", json={"text": "meh"})
+    assert client.post("/api/undo").get_json()["undone"] == "exemplar bad"
+
+
 def test_repair_deck_filter(client):
     fake = client.fake
     fake.notes[5001] = {"fields": {"Front": "a", "Back": "b"}, "model": "Basic", "deck": "Default"}

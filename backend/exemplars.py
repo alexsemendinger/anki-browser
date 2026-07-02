@@ -67,6 +67,31 @@ def delete_at(exemplar_file, index):
     return removed
 
 
+def set_comment(exemplar_file, index, text):
+    """Replace the comment on the snapshot at `index` (file position).
+    Returns the old comment, or None if the index is out of range. Only the
+    comment is mutable -- the snapshot content stays frozen."""
+    rows = list_all(exemplar_file)
+    if index < 0 or index >= len(rows):
+        return None
+    old = rows[index].get("comment", "")
+    rows[index]["comment"] = text
+    _rewrite(exemplar_file, rows)
+    return old
+
+
+def set_comment_by_date(exemplar_file, date, text):
+    """Same, addressed by the snapshot's `date` stamp (stable across deletes,
+    unlike a file index). Used by undo. No-op if the row is gone."""
+    rows = list_all(exemplar_file)
+    for row in rows:
+        if row.get("date") == date:
+            row["comment"] = text
+            _rewrite(exemplar_file, rows)
+            return True
+    return False
+
+
 def _rewrite(exemplar_file, rows):
     with open(exemplar_file, "w", encoding="utf-8") as fh:
         for row in rows:

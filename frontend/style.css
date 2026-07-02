@@ -299,11 +299,14 @@ select:focus, #survey-filters input:focus { outline: none; border-color: var(--s
   padding: 10px 8px;
   cursor: pointer;
 }
+/* exemplar rows stack: main line + the full comment underneath */
+.ex { display: block; }
+.ex-main { display: flex; gap: 14px; align-items: center; }
 .gravecard:hover, .ex:hover { background: rgba(255, 255, 255, 0.35); }
 .grave-meta { display: flex; gap: 2px; flex-direction: column; min-width: 180px; color: var(--faded); font: 11px/1.6 var(--mono); }
 .grave-text, .ex-front { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.restore, .ex-del {
+.restore, .ex-del, .ex-edit {
   font: 11px/1 var(--type);
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -316,6 +319,7 @@ select:focus, #survey-filters input:focus { outline: none; border-color: var(--s
 }
 .restore:hover { border-color: var(--stamp-green); color: var(--stamp-green); }
 .ex-del:hover { border-color: var(--stamp-red); color: var(--stamp-red); }
+.ex-edit:hover { border-color: var(--steel); color: var(--steel); }
 
 .ex .v, .cardview-meta .v {
   font: 10px/1 var(--type);
@@ -327,7 +331,22 @@ select:focus, #survey-filters input:focus { outline: none; border-color: var(--s
 }
 .v.good { color: var(--stamp-green); border-color: var(--stamp-green); }
 .v.bad { color: var(--stamp-red); border-color: var(--stamp-red); }
-.ex-cmt { color: var(--steel); font-size: 12px; max-width: 32%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex .ex-cmt { display: block; margin: 7px 0 2px 46px; color: var(--steel); font-size: 13px; line-height: 1.5; white-space: pre-wrap; cursor: text; }
+.cardview-meta .ex-cmt { color: var(--steel); font-size: 12px; }
+.ex-cmt-edit {
+  width: 100%;
+  min-height: 54px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--steel);
+  border-radius: 3px;
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  resize: vertical;
+}
+.ex-cmt-edit:focus { outline: none; }
 .ex-deck { flex-shrink: 0; font: 11px/1 var(--mono); color: var(--faded); }
 
 /* --- history ------------------------------------------------------------------------------ */

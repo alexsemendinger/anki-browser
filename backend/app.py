@@ -417,6 +417,23 @@ def create_app(cfg=None):
             return jsonify({"error": "not found"}), 404
         return jsonify({"ok": True})
 
+    @app.post("/api/exemplars/<int:idx>/comment")
+    def exemplar_comment(idx):
+        text = ((request.json or {}).get("text") or "").strip()
+        rows = exemplars.list_all(paths["exemplars"])
+        if idx < 0 or idx >= len(rows):
+            return jsonify({"error": "not found"}), 404
+        old = exemplars.set_comment(paths["exemplars"], idx, text)
+        if old == text:
+            return jsonify({"ok": True})  # no change, nothing to undo
+        actions.push(
+            paths["actions"],
+            "edit_exemplar",
+            {"date": rows[idx].get("date"), "old": old, "new": text},
+            "exemplar comment",
+        )
+        return jsonify({"ok": True})
+
     # --- undo / history ---------------------------------------------------
     # Kinds that recorded a stat when they happened. The undo stack and
     # events.jsonl are order-aligned: the k-th stat-recording action in the
@@ -483,6 +500,8 @@ def create_app(cfg=None):
             _delete_exemplar_near(record["ts"])
             if payload.get("commented"):
                 inbox.pop_comment(paths["inbox"], payload["card_id"])
+        elif kind == "edit_exemplar":
+            exemplars.set_comment_by_date(paths["exemplars"], payload["date"], payload["old"])
 
     def _undo_at(index):
         stack = actions.list_all(paths["actions"])

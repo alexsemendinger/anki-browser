@@ -19,6 +19,10 @@ Alex's taste, not just shipping features.
   friction — "if I have to do some nonsense like `venv activate…` every time I'm
   going to lose my mind." Hence `./start.sh` (self-bootstrapping, opens the
   browser, no activation). Apply the same instinct elsewhere: remove ritual.
+- **No locked information.** "I should be able to see and interact with the
+  information in this app" — he kept having to ask for visibility (rendered
+  graveyard cards, full exemplar comments, history). When you store a datum,
+  build the see-it-in-full and edit-it path in the same pass.
 - **Do the standard, obvious thing.** He got visibly frustrated when the app
   showed stripped text instead of just rendering a card the normal way: "there's
   a standard way to display a card and you keep doing anything except letting me
@@ -105,7 +109,8 @@ Surfaces: **1 inbox** (deck-filterable, per-card approval gating, send-back sink
 to bottom), **2 repair** (flagged live cards; edit clears the native flag via
 `setSpecificValueOfCard`), **3 survey** (whole-deck grid, lazy-rendered),
 **4 stats** (heatmap + reviews chart + tiles), **5 graveyard** (restore /
-click-to-render), **6 exemplars** (comments, delete, click-to-render),
+click-to-render), **6 exemplars** (full comments shown, editable in place,
+delete, click-to-render),
 **7 history** (every undoable action, newest first; undo any row — for
 "I approved that 10 cards ago by mistake"). Settings (Beeminder) behind ⚙ / `,`.
 
