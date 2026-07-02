@@ -393,64 +393,112 @@ def create_app(cfg=None):
             return jsonify({"error": "not found"}), 404
         return jsonify({"ok": True})
 
-    # --- undo ------------------------------------------------------------
-    @app.post("/api/undo")
-    def undo():
-        record = actions.peek(paths["actions"])
-        if record is None:
-            return jsonify({"undone": None})
+    # --- undo / history ---------------------------------------------------
+    # Kinds that recorded a stat when they happened. The undo stack and
+    # events.jsonl are order-aligned: the k-th stat-recording action in the
+    # stack corresponds to the k-th event row, so undoing any action (not
+    # just the top) removes its own stat.
+    STAT_KINDS = {"approve", "delete", "send_back", "repair", "exemplar"}
+
+    def _delete_exemplar_near(ts):
+        """Exemplar action payloads are empty, so find the snapshot written at
+        (about) the action's timestamp. Does nothing rather than delete the
+        wrong row (e.g. if it was already deleted from the exemplars surface)."""
+        target = datetime.fromisoformat(ts)
+        best, best_dt = None, None
+        for i, row in enumerate(exemplars.list_all(paths["exemplars"])):
+            try:
+                dt = abs((datetime.fromisoformat(row.get("date", "")) - target).total_seconds())
+            except ValueError:
+                continue
+            if best_dt is None or dt < best_dt:
+                best, best_dt = i, dt
+        if best is not None and best_dt <= 10:
+            exemplars.delete_at(paths["exemplars"], best)
+
+    def _reverse(record):
+        """Reverse a record's effects (stats/session bookkeeping is separate).
+        May raise AnkiUnavailable, in which case nothing has been removed."""
         kind = record["kind"]
         payload = record["payload"]
+        if kind == "approve":
+            anki.delete_notes([payload["note_id"]])
+            inbox.save_card(paths["inbox"], payload["card"])
+        elif kind == "delete":
+            card = graveyard.exhume(paths["graveyard"], payload["card_id"])
+            if card:
+                inbox.save_card(paths["inbox"], card)
+        elif kind == "send_back":
+            inbox.pop_comment(paths["inbox"], payload["card_id"])
+        elif kind == "approve_card":
+            c = inbox.get_card(paths["inbox"], payload["card_id"])
+            if c is not None:
+                inbox.set_approved(
+                    paths["inbox"],
+                    payload["card_id"],
+                    [o for o in c.get("approved_cards", []) if o != payload["ordinal"]],
+                )
+        elif kind == "edit_inbox":
+            restore = {
+                "fields": payload["old_fields"],
+                "approved_cards": payload.get("old_approved", []),
+            }
+            if payload.get("old_deck"):
+                restore["deck"] = payload["old_deck"]
+            if payload.get("old_tags") is not None:
+                restore["tags"] = payload["old_tags"]
+            inbox.update_card(paths["inbox"], payload["card_id"], restore)
+        elif kind == "repair":
+            anki.update_note_fields(payload["note_id"], payload["old_fields"])
+            if payload.get("card_id"):
+                try:
+                    anki.set_flag(payload["card_id"], payload["old_flag"])
+                except AnkiConnectError:
+                    pass
+        elif kind == "exemplar":
+            _delete_exemplar_near(record["ts"])
+
+    def _undo_at(index):
+        stack = actions.list_all(paths["actions"])
+        record = stack[index]
+        _reverse(record)
+        if record["kind"] in STAT_KINDS:
+            stat_idx = sum(1 for r in stack[:index] if r["kind"] in STAT_KINDS)
+            stats.pop_at(paths["stats"], stat_idx)
+            if record["kind"] != "exemplar":
+                _bump_session(paths["session"], -1)
+        actions.remove_at(paths["actions"], index)
+        return record
+
+    @app.post("/api/undo")
+    def undo():
+        depth = actions.depth(paths["actions"])
+        if not depth:
+            return jsonify({"undone": None})
         try:
-            if kind == "approve":
-                anki.delete_notes([payload["note_id"]])
-                inbox.save_card(paths["inbox"], payload["card"])
-                stats.pop_last(paths["stats"])
-                _bump_session(paths["session"], -1)
-            elif kind == "delete":
-                card = graveyard.exhume(paths["graveyard"], payload["card_id"])
-                if card:
-                    inbox.save_card(paths["inbox"], card)
-                stats.pop_last(paths["stats"])
-                _bump_session(paths["session"], -1)
-            elif kind == "send_back":
-                inbox.pop_comment(paths["inbox"], payload["card_id"])
-                stats.pop_last(paths["stats"])
-                _bump_session(paths["session"], -1)
-            elif kind == "approve_card":
-                c = inbox.get_card(paths["inbox"], payload["card_id"])
-                if c is not None:
-                    inbox.set_approved(
-                        paths["inbox"],
-                        payload["card_id"],
-                        [o for o in c.get("approved_cards", []) if o != payload["ordinal"]],
-                    )
-            elif kind == "edit_inbox":
-                restore = {
-                    "fields": payload["old_fields"],
-                    "approved_cards": payload.get("old_approved", []),
-                }
-                if payload.get("old_deck"):
-                    restore["deck"] = payload["old_deck"]
-                if payload.get("old_tags") is not None:
-                    restore["tags"] = payload["old_tags"]
-                inbox.update_card(paths["inbox"], payload["card_id"], restore)
-            elif kind == "repair":
-                anki.update_note_fields(payload["note_id"], payload["old_fields"])
-                if payload.get("card_id"):
-                    try:
-                        anki.set_flag(payload["card_id"], payload["old_flag"])
-                    except AnkiConnectError:
-                        pass
-                stats.pop_last(paths["stats"])
-                _bump_session(paths["session"], -1)
-            elif kind == "exemplar":
-                exemplars.pop_last(paths["exemplars"])
-                stats.pop_last(paths["stats"])
+            record = _undo_at(depth - 1)
         except AnkiUnavailable as exc:
             return jsonify({"error": "anki unavailable", "detail": str(exc)}), 503
-        actions.pop(paths["actions"])
         return jsonify({"undone": record["label"], "remaining_undo": actions.depth(paths["actions"])})
+
+    @app.get("/api/history")
+    def history():
+        stack = actions.list_all(paths["actions"])
+        return jsonify({"actions": stack, "count": len(stack)})
+
+    @app.post("/api/history/<int:index>/undo")
+    def history_undo(index):
+        stack = actions.list_all(paths["actions"])
+        if index < 0 or index >= len(stack):
+            return jsonify({"error": "not found"}), 404
+        ts = (request.json or {}).get("ts")
+        if ts and stack[index]["ts"] != ts:
+            return jsonify({"error": "history changed, reloaded"}), 409
+        try:
+            record = _undo_at(index)
+        except AnkiUnavailable as exc:
+            return jsonify({"error": "anki unavailable", "detail": str(exc)}), 503
+        return jsonify({"undone": record["label"]})
 
     # --- stats / session / beeminder ------------------------------------
     @app.get("/api/stats")

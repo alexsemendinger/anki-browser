@@ -437,6 +437,35 @@ def test_inbox_edit_deck_tags_and_undo(client):
     assert back["approved_cards"] == [1]
 
 
+def test_history_lists_actions_and_undoes_arbitrary_one(client):
+    a = inbox.save_card(client.cfg["paths"]["inbox"], {"note_type": "Basic", "deck": "Default", "fields": {"Front": "A", "Back": "1"}})
+    b = inbox.save_card(client.cfg["paths"]["inbox"], {"note_type": "Basic", "deck": "Default", "fields": {"Front": "B", "Back": "2"}})
+    client.post(f"/api/inbox/{a['id']}/approve")       # -> Anki
+    client.post(f"/api/inbox/{b['id']}/delete")        # -> graveyard
+    hist = client.get("/api/history").get_json()
+    assert hist["count"] == 2
+    assert [r["kind"] for r in hist["actions"]] == ["approve", "delete"]
+    # undo the OLDER action (the approve) while the delete stays put
+    res = client.post("/api/history/0/undo", json={"ts": hist["actions"][0]["ts"]})
+    assert res.get_json()["undone"] == "approve"
+    assert client.fake.notes == {}                     # note pulled back out of Anki
+    assert inbox.get_card(client.cfg["paths"]["inbox"], a["id"]) is not None
+    # the delete action, and only it, remains -- with its stat
+    hist = client.get("/api/history").get_json()
+    assert [r["kind"] for r in hist["actions"]] == ["delete"]
+    totals = client.get("/api/stats").get_json()["totals"]
+    assert totals.get("approve", 0) == 0 and totals["delete"] == 1
+    # plain undo still works on what's left
+    assert client.post("/api/undo").get_json()["undone"] == "delete"
+
+
+def test_history_undo_stale_ts_409(client):
+    card = inbox.save_card(client.cfg["paths"]["inbox"], {"note_type": "Basic", "deck": "Default", "fields": {"Front": "Q", "Back": "A"}})
+    client.post(f"/api/inbox/{card['id']}/delete")
+    assert client.post("/api/history/0/undo", json={"ts": "2000-01-01T00:00:00+00:00"}).status_code == 409
+    assert client.post("/api/history/5/undo", json={}).status_code == 404
+
+
 def test_exemplar_delete_lands_in_trash(client):
     client.post("/api/exemplar", json={"verdict": "bad", "note_type": "Basic", "fields": {"Front": "Q"}, "rendered": {}})
     client.post("/api/exemplars/0/delete")

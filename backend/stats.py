@@ -22,14 +22,21 @@ def record(stats_file, event_type):
 
 
 def pop_last(stats_file):
+    return pop_at(stats_file, -1)
+
+
+def pop_at(stats_file, index):
+    """Remove the event at `index` (0 = oldest, -1 = newest). Events are
+    order-aligned with the undo stack's stat-recording actions, so undoing
+    the k-th such action removes the k-th event."""
     rows = _read(stats_file)
-    if not rows:
+    if not rows or index >= len(rows) or index < -len(rows):
         return None
-    last = rows.pop()
+    removed = rows.pop(index)
     with open(stats_file, "w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row) + "\n")
-    return last
+    return removed
 
 
 def _read(stats_file):

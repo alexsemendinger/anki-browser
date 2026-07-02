@@ -143,11 +143,12 @@ least sure of and could not test.
 - **Exemplar snapshots are frozen content, not note references.** Never resolve
   an exemplar back through a live note id at display time; that reintroduces the
   exact bug the spec calls out (a now-good card reading as bad).
-- **Undo stack <-> stats alignment.** Both are append-ordered. Every action that
-  records a stat (approve, delete, send_back, repair, exemplar) pops that stat on
-  undo; `edit_inbox` records no stat and pops none. Because undo is strictly LIFO
-  and these stay in lockstep, popping the top action and the top stat is always
-  aligned. If you add a new action: either it records a stat AND its undo pops
+- **Undo stack <-> stats alignment.** Both are append-ordered, so the k-th
+  stat-recording action (approve, delete, send_back, repair, exemplar)
+  corresponds to the k-th `events.jsonl` row; `approve_card`/`edit_inbox`
+  record no stat. Undo — LIFO `u` or arbitrary via the history surface —
+  removes the action and its stat at the same position (`stats.pop_at`).
+  If you add a new action: either it records a stat AND its undo removes
   one, or neither. Don't half-do it.
 
 ## Known risks / verify with Anki up

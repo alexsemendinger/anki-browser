@@ -102,8 +102,9 @@ Surfaces: **1 inbox** (deck-filterable, per-card approval gating, send-back sink
 to bottom), **2 repair** (flagged live cards; edit clears the native flag via
 `setSpecificValueOfCard`), **3 survey** (whole-deck grid, lazy-rendered),
 **4 stats** (heatmap + reviews chart + tiles), **5 graveyard** (restore /
-click-to-render), **6 exemplars** (comments, delete, click-to-render). Settings
-(Beeminder) behind ⚙ / `,`.
+click-to-render), **6 exemplars** (comments, delete, click-to-render),
+**7 history** (every undoable action, newest first; undo any row — for
+"I approved that 10 cards ago by mistake"). Settings (Beeminder) behind ⚙ / `,`.
 
 Cross-cutting since v1:
 - Card iframes are sandboxed and **forward keystrokes to the app via

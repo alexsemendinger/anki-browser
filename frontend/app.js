@@ -86,6 +86,7 @@ const KEYHINTS = {
   stats: [],
   graveyard: [["click", "preview"]],
   exemplars: [["click", "preview"]],
+  history: [["click", "undo"]],
 };
 const KEYHINTS_GLOBAL = [["g", "exemplar"], ["u", "undo"], ["?", "help"]];
 
@@ -110,6 +111,7 @@ function setSurface(name) {
   if (name === "stats") loadStats();
   if (name === "graveyard") loadGraveyard();
   if (name === "exemplars") loadExemplars();
+  if (name === "history") loadHistory();
 }
 
 function updateBadges() {
@@ -800,6 +802,52 @@ async function commitExemplar() {
   toast(res.ok ? "exemplar " + verdict : "failed", res.ok ? "ok" : undefined);
 }
 
+// --- history (arbitrary undo) -----------------------------------------------
+function historyDetail(r) {
+  const p = r.payload || {};
+  if (r.kind === "approve") return stripTags(frontText((p.card || {}).fields));
+  if (r.kind === "repair") return stripTags(frontText(p.old_fields));
+  return p.card_id || "";
+}
+
+async function loadHistory() {
+  const data = await api.get("/api/history");
+  state.history = data.actions || [];
+  const list = $("history-list");
+  if (!state.history.length) {
+    list.innerHTML = '<div class="empty">no actions yet</div>';
+    return;
+  }
+  list.innerHTML = state.history
+    .map((r, i) => ({ r, i }))
+    .reverse()
+    .map(
+      ({ r, i }) =>
+        `<div class="hrow">` +
+        `<span class="hwhen">${(r.ts || "").slice(0, 16).replace("T", " ")}</span>` +
+        `<span class="hkind hk-${r.kind}">${escapeHtml(r.label)}</span>` +
+        `<span class="hdetail">${escapeHtml(historyDetail(r)).slice(0, 110)}</span>` +
+        `<button class="hundo" data-i="${i}" data-ts="${escapeHtml(r.ts || "")}">undo</button>` +
+        `</div>`
+    )
+    .join("");
+}
+
+$("history-list").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".hundo");
+  if (!btn) return;
+  const res = await api.send(`/api/history/${btn.dataset.i}/undo`, "POST", { ts: btn.dataset.ts });
+  if (!res.ok) {
+    toast(res.data.error || "undo failed");
+    await loadHistory();
+    return;
+  }
+  toast("undo: " + res.data.undone, "info");
+  await loadHistory();
+  await loadInbox(); // inbox contents / badge may have changed
+  await refreshSession();
+});
+
 // --- undo -----------------------------------------------------------------
 async function doUndo() {
   const res = await api.send("/api/undo", "POST", {});
@@ -994,7 +1042,7 @@ async function testBeeminderPush() {
 
 // --- help -----------------------------------------------------------------
 const HELP = [
-  ["1-6", "inbox · repair · survey · stats · graveyard · exemplars"],
+  ["1-7", "inbox · repair · survey · stats · graveyard · exemplars · history"],
   ["j / k", "move down / up"],
   ["h / l", "move left / right"],
   ["space", "front only / full card"],
@@ -1003,7 +1051,7 @@ const HELP = [
   ["c", "comment + send back (inbox)"],
   ["e", "edit fields (inbox / repair)"],
   ["g", "exemplar (g/b, then why + Ctrl+Enter)"],
-  ["u", "undo"],
+  ["u", "undo last · history (7) undoes any past action"],
   ["s", "start session / set target"],
   [",", "settings (beeminder)"],
   ["?", "this help"],
@@ -1084,6 +1132,7 @@ function onKey(e) {
   if (k === "4") return setSurface("stats");
   if (k === "5") return setSurface("graveyard");
   if (k === "6") return setSurface("exemplars");
+  if (k === "7") return setSurface("history");
   if (k === "?") return toggleHelp();
   if (k === ",") return openSettings();
   if (k === "u") return doUndo();

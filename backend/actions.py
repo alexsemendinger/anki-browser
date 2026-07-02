@@ -46,3 +46,18 @@ def pop(actions_file):
 
 def depth(actions_file):
     return len(_read(actions_file))
+
+
+def list_all(actions_file):
+    return _read(actions_file)
+
+
+def remove_at(actions_file, index):
+    """Remove the record at `index` (0 = oldest). Arbitrary-history undo;
+    plain undo is the index == len-1 case."""
+    stack = _read(actions_file)
+    if index < 0 or index >= len(stack):
+        return None
+    removed = stack.pop(index)
+    _write(actions_file, stack)
+    return removed

@@ -14,7 +14,7 @@ spec; `README.md` is usage.
 ## Invariants — don't break these
 - **AnkiConnect is the only write path to the live deck.** No direct collection writes.
 - **Nothing is hard-deleted** by the tool (inbox delete → graveyard).
-- **Undo stack ↔ stats are LIFO lockstep.** A new action either records a stat AND its undo pops one, or neither.
+- **Undo stack ↔ stats are order-aligned.** The k-th stat-recording action in `actions.json` corresponds to the k-th row of `events.jsonl`; undoing an action (top-of-stack `u`, or any row via the history surface) removes both at the same position. A new action either records a stat AND its undo removes one, or neither.
 - **Live deck cards are rendered by Anki** (`cardsInfo` HTML+CSS), not by `rendering.py`; that engine is only for provisional inbox cards.
 - **Filename stem is the canonical inbox id** (`inbox._normalize` overwrites `id`).
 - **The inbox JSON format is the card-generation seam** — keep it stable, additive changes only.

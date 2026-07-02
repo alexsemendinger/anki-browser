@@ -330,6 +330,44 @@ select:focus, #survey-filters input:focus { outline: none; border-color: var(--s
 .ex-cmt { color: var(--steel); font-size: 12px; max-width: 32%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-deck { flex-shrink: 0; font: 11px/1 var(--mono); color: var(--faded); }
 
+/* --- history ------------------------------------------------------------------------------ */
+#history-list { flex: 1; overflow: auto; padding: 10px 20px 20px; }
+.hrow {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid rgba(90, 75, 45, 0.25);
+  padding: 8px 8px;
+}
+.hwhen { font: 11px/1 var(--mono); color: var(--faded); width: 116px; flex-shrink: 0; }
+.hkind {
+  font: 10px/1 var(--type);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: 2px solid var(--faded);
+  color: var(--faded);
+  border-radius: 3px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+.hk-approve, .hk-approve_card { color: var(--stamp-green); border-color: var(--stamp-green); }
+.hk-delete { color: var(--stamp-red); border-color: var(--stamp-red); }
+.hk-send_back { color: var(--steel); border-color: var(--steel); }
+.hk-repair { color: var(--stamp-orange); border-color: var(--stamp-orange); }
+.hdetail { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.hundo {
+  font: 11px/1 var(--type);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: transparent;
+  color: var(--faded);
+  border: 1px solid var(--manila-line);
+  border-radius: 3px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.hundo:hover { border-color: var(--steel); color: var(--steel); }
+
 /* --- stats ------------------------------------------------------------------------------- */
 #stats-scroll { flex: 1; overflow: auto; padding: 22px; }
 .charts { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
