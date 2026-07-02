@@ -414,6 +414,29 @@ def test_exemplar_delete_out_of_range_404(client):
     assert client.post("/api/exemplars/9/delete").status_code == 404
 
 
+def test_inbox_edit_deck_tags_and_undo(client):
+    card = inbox.save_card(client.cfg["paths"]["inbox"], {
+        "note_type": "Cloze", "deck": "Default",
+        "fields": {"Text": "{{c1::x}} {{c2::y}}"}, "tags": ["old"],
+    })
+    cid = card["id"]
+    client.post(f"/api/inbox/{cid}/approve", json={"ordinal": 1})
+    # deck/tags-only edit: content unchanged, so the partial approval survives
+    res = client.put(f"/api/inbox/{cid}", json={"fields": card["fields"], "deck": "Other", "tags": ["nyc", "claude"]})
+    got = res.get_json()["card"]
+    assert got["deck"] == "Other" and got["tags"] == ["nyc", "claude"]
+    assert got["approved_cards"] == [1]
+    # a field edit still resets approvals
+    client.put(f"/api/inbox/{cid}", json={"fields": {"Text": "{{c1::z}} {{c2::y}}"}})
+    assert inbox.get_card(client.cfg["paths"]["inbox"], cid)["approved_cards"] == []
+    # undo the field edit, then the deck/tags edit
+    client.post("/api/undo")
+    client.post("/api/undo")
+    back = inbox.get_card(client.cfg["paths"]["inbox"], cid)
+    assert back["deck"] == "Default" and back["tags"] == ["old"]
+    assert back["approved_cards"] == [1]
+
+
 def test_exemplar_delete_lands_in_trash(client):
     client.post("/api/exemplar", json={"verdict": "bad", "note_type": "Basic", "fields": {"Front": "Q"}, "rendered": {}})
     client.post("/api/exemplars/0/delete")

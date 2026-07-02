@@ -502,6 +502,9 @@ select:focus, #survey-filters input:focus { outline: none; border-color: var(--s
   color: var(--faded);
   margin-bottom: 3px;
 }
+.edrow { display: flex; gap: 10px; }
+.edrow .field-row { flex: 1; }
+.field-row select, .field-row input[type="text"],
 .field-row textarea, #comment-text, #session-target, #session-prompt input {
   width: 100%;
   background: #fff;

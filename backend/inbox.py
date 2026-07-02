@@ -96,6 +96,15 @@ def update_fields(inbox_dir, card_id, fields):
     return save_card(inbox_dir, card)
 
 
+def update_card(inbox_dir, card_id, updates):
+    """Set top-level keys on a card (fields, deck, tags, ...) and save."""
+    card = get_card(inbox_dir, card_id)
+    if card is None:
+        return None
+    card.update(updates)
+    return save_card(inbox_dir, card)
+
+
 def set_approved(inbox_dir, card_id, ordinals):
     """Set the list of per-card approvals (cloze ordinals) on a provisional
     note. The note is sent to Anki only once every card is approved."""

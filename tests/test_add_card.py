@@ -52,6 +52,20 @@ def test_cloze_without_markers_warns():
     assert any("marker" in w for w in warnings)
 
 
+def test_json_cards_default_source_ai(tmp_path, monkeypatch):
+    conf = tmp_path / "config.json"
+    conf.write_text(json.dumps({"data_dir": str(tmp_path / "data")}))
+    monkeypatch.setattr(sys, "argv", [
+        "add-card", "--no-validate", "--config", str(conf),
+        "--json", json.dumps({"fields": {"Front": "Q", "Back": "A"}}),
+    ])
+    add_card.main()
+    files = list((tmp_path / "data" / "inbox").glob("*.json"))
+    assert len(files) == 1
+    written = json.loads(files[0].read_text())
+    assert written["source"] == "ai"
+
+
 # --- pure helpers ---------------------------------------------------------
 
 def test_slug_and_safe_stem():

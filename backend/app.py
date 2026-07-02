@@ -212,21 +212,29 @@ def create_app(cfg=None):
 
     @app.put("/api/inbox/<card_id>")
     def inbox_edit(card_id):
-        fields = (request.json or {}).get("fields", {})
+        body = request.json or {}
         card = inbox.get_card(paths["inbox"], card_id)
         if card is None:
             return jsonify({"error": "not found"}), 404
-        old_fields = card.get("fields", {})
-        old_approved = list(card.get("approved_cards", []))
-        inbox.update_fields(paths["inbox"], card_id, fields)
-        # content changed -> prior per-card approvals are stale, re-review
-        card = inbox.set_approved(paths["inbox"], card_id, [])
-        actions.push(
-            paths["actions"],
-            "edit_inbox",
-            {"card_id": card_id, "old_fields": old_fields, "old_approved": old_approved},
-            "edit",
-        )
+        old = {
+            "old_fields": card.get("fields", {}),
+            "old_approved": list(card.get("approved_cards", [])),
+            "old_deck": card.get("deck"),
+            "old_tags": list(card.get("tags", [])),
+        }
+        updates = {}
+        fields = body.get("fields")
+        if fields is not None:
+            updates["fields"] = fields
+            if fields != old["old_fields"]:
+                # content changed -> prior per-card approvals are stale, re-review
+                updates["approved_cards"] = []
+        if isinstance(body.get("deck"), str) and body["deck"]:
+            updates["deck"] = body["deck"]
+        if isinstance(body.get("tags"), list):
+            updates["tags"] = [str(t) for t in body["tags"]]
+        card = inbox.update_card(paths["inbox"], card_id, updates)
+        actions.push(paths["actions"], "edit_inbox", {"card_id": card_id, **old}, "edit")
         return jsonify({"ok": True, "card": card, "rendered": renderer.render_provisional(card)})
 
     # --- repair queue ----------------------------------------------------
@@ -418,8 +426,15 @@ def create_app(cfg=None):
                         [o for o in c.get("approved_cards", []) if o != payload["ordinal"]],
                     )
             elif kind == "edit_inbox":
-                inbox.update_fields(paths["inbox"], payload["card_id"], payload["old_fields"])
-                inbox.set_approved(paths["inbox"], payload["card_id"], payload.get("old_approved", []))
+                restore = {
+                    "fields": payload["old_fields"],
+                    "approved_cards": payload.get("old_approved", []),
+                }
+                if payload.get("old_deck"):
+                    restore["deck"] = payload["old_deck"]
+                if payload.get("old_tags") is not None:
+                    restore["tags"] = payload["old_tags"]
+                inbox.update_card(paths["inbox"], payload["card_id"], restore)
             elif kind == "repair":
                 anki.update_note_fields(payload["note_id"], payload["old_fields"])
                 if payload.get("card_id"):

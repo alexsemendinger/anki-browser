@@ -14,6 +14,7 @@ const state = {
   exemplarVerdict: null,
   exemplars: [],
   graveyard: [],
+  decks: [],
   cardView: null,
   targetAnnounced: false,
   statsRange: 30,
@@ -344,8 +345,9 @@ function renderRepair() {
 // --- survey ---------------------------------------------------------------
 async function loadDecks() {
   const data = await api.get("/api/decks");
+  state.decks = data.decks || [];
   const sel = $("f-deck");
-  sel.innerHTML = '<option value="">deck</option>' + data.decks.map((d) => `<option>${escapeHtml(d)}</option>`).join("");
+  sel.innerHTML = '<option value="">deck</option>' + state.decks.map((d) => `<option>${escapeHtml(d)}</option>`).join("");
 }
 
 function hasSurveyScope() {
@@ -832,16 +834,24 @@ function closeOverlays() {
 }
 
 function openEditor() {
-  let fields, order, title, onSave;
+  let fields, order, title, onSave, head = "";
   if (state.surface === "inbox") {
     const item = state.inbox.cards[state.inbox.idx];
     if (!item) return;
     fields = item.card.fields;
     order = item.rendered.field_order;
     title = "edit (inbox)";
+    // deck + tags are editable too: a good card can just be misfiled
+    const decks = [...new Set([item.card.deck, ...(state.decks || [])])].filter(Boolean);
+    head =
+      `<div class="edrow"><div class="field-row"><label>deck</label><select id="ed-deck">${decks
+        .map((d) => `<option${d === item.card.deck ? " selected" : ""}>${escapeHtml(d)}</option>`)
+        .join("")}</select></div>` +
+      `<div class="field-row"><label>tags</label><input id="ed-tags" type="text" value="${escapeHtml((item.card.tags || []).join(" "))}"></div></div>`;
     onSave = async (vals) => {
-      const res = await api.send(`/api/inbox/${item.card.id}`, "PUT", { fields: vals });
+      const res = await api.send(`/api/inbox/${item.card.id}`, "PUT", vals);
       if (res.ok) { await loadInbox(); toast("saved"); }
+      else toast(res.data.error || "save failed");
     };
   } else if (state.surface === "repair") {
     const c = state.repair.cards[state.repair.idx];
@@ -850,7 +860,7 @@ function openEditor() {
     order = c.field_order;
     title = "edit (repair) · saving clears flag";
     onSave = async (vals) => {
-      const res = await api.send(`/api/repair/${c.note_id}`, "PUT", { fields: vals, card_id: c.card_id });
+      const res = await api.send(`/api/repair/${c.note_id}`, "PUT", { fields: vals.fields, card_id: c.card_id });
       if (res.ok) {
         toast(res.data.flag_cleared ? "repaired" : "saved (flag not cleared)");
         await loadRepair();
@@ -863,12 +873,14 @@ function openEditor() {
     return;
   }
   $("editor-title").textContent = title;
-  $("editor-fields").innerHTML = order
-    .map(
-      (name, i) =>
-        `<div class="field-row"><label>${name}</label><textarea data-field="${name}" rows="3">${escapeHtml(fields[name] || "")}</textarea></div>`
-    )
-    .join("");
+  $("editor-fields").innerHTML =
+    head +
+    order
+      .map(
+        (name) =>
+          `<div class="field-row"><label>${name}</label><textarea data-field="${name}" rows="3">${escapeHtml(fields[name] || "")}</textarea></div>`
+      )
+      .join("");
   $("editor").dataset.surface = state.surface;
   editorSave = onSave;
   openOverlay("editor");
@@ -878,11 +890,16 @@ function openEditor() {
 let editorSave = null;
 
 function collectEditor() {
-  const vals = {};
+  const fields = {};
   $("editor-fields")
     .querySelectorAll("textarea")
-    .forEach((t) => (vals[t.dataset.field] = t.value));
-  return vals;
+    .forEach((t) => (fields[t.dataset.field] = t.value));
+  const out = { fields };
+  const deck = $("ed-deck");
+  const tags = $("ed-tags");
+  if (deck) out.deck = deck.value;
+  if (tags) out.tags = tags.value.trim() ? tags.value.trim().split(/\s+/) : [];
+  return out;
 }
 
 function openCommenter() {

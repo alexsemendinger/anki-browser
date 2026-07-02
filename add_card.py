@@ -171,6 +171,11 @@ def main():
     for card in cards:
         card.setdefault("note_type", "Basic")
         card.setdefault("deck", cfg["default_deck"])
+        # JSON cards that don't declare a source get the CLI default ("ai") --
+        # anything arriving through this entry point is agent-written unless
+        # it says otherwise. (Files dropped in by hand still read "manual"
+        # via the inbox loader's own default.)
+        card.setdefault("source", args.source)
         card.setdefault("fields", {})
         card["fields"] = {k: ("" if v is None else str(v)) for k, v in card["fields"].items()}
         label = re.sub(r"<[^>]+>", "", next(iter(card["fields"].values()), ""))[:50]
