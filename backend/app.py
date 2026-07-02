@@ -248,8 +248,15 @@ def create_app(cfg=None):
         except AnkiUnavailable as exc:
             return jsonify({"error": "anki unavailable", "detail": str(exc)}), 503
         cards = [renderer.shape_live(i) for i in infos]
+        decks = {}
+        for c in cards:
+            d = c.get("deck", "")
+            decks[d] = decks.get(d, 0) + 1
+        wanted = request.args.get("deck")
+        if wanted:
+            cards = [c for c in cards if c.get("deck") == wanted]
         cards.sort(key=lambda c: (c["flag"] != 1, c["flag"]))  # red first
-        return jsonify({"cards": cards, "count": len(cards)})
+        return jsonify({"cards": cards, "count": len(cards), "decks": decks})
 
     @app.put("/api/repair/<int:note_id>")
     def repair_save(note_id):

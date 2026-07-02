@@ -175,6 +175,35 @@ def test_repair_flow_and_undo(client):
     assert fake.cards[9001]["flag"] == 1
 
 
+def test_repair_deck_filter(client):
+    fake = client.fake
+    fake.notes[5001] = {"fields": {"Front": "a", "Back": "b"}, "model": "Basic", "deck": "Default"}
+    fake.notes[5002] = {"fields": {"Front": "c", "Back": "d"}, "model": "Basic", "deck": "Math"}
+    fake.cards[9001] = {
+        "note_id": 5001,
+        "flag": 1,
+        "model": "Basic",
+        "deck": "Default",
+        "fields": {"Front": {"value": "a", "order": 0}, "Back": {"value": "b", "order": 1}},
+    }
+    fake.cards[9002] = {
+        "note_id": 5002,
+        "flag": 2,
+        "model": "Basic",
+        "deck": "Math",
+        "fields": {"Front": {"value": "c", "order": 0}, "Back": {"value": "d", "order": 1}},
+    }
+    listing = client.get("/api/repair").get_json()
+    assert listing["count"] == 2
+    assert listing["decks"] == {"Default": 1, "Math": 1}
+
+    filtered = client.get("/api/repair?deck=Math").get_json()
+    assert filtered["count"] == 1
+    assert filtered["cards"][0]["deck"] == "Math"
+    # deck tallies stay global so the dropdown keeps every option
+    assert filtered["decks"] == {"Default": 1, "Math": 1}
+
+
 def test_exemplar_snapshot_and_undo(client):
     payload = {
         "verdict": "good",

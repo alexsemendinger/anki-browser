@@ -247,7 +247,7 @@ kbd {
 .flag-orange { color: var(--stamp-orange); border-color: var(--stamp-orange); }
 
 /* --- filter rows ----------------------------------------------------------------- */
-#inbox-filter, #survey-filters {
+#inbox-filter, #repair-filter, #survey-filters {
   display: flex;
   gap: 8px;
   align-items: center;

@@ -8,7 +8,7 @@ const state = {
   // the rendered answer, which by Anki convention IS the full card (FrontSide
   // + rule + back) -- you're judging cards, not studying them.
   inbox: { cards: [], idx: 0, ord: 0, front: false, deck: "" },
-  repair: { cards: [], idx: 0, front: false },
+  repair: { cards: [], idx: 0, front: false, deck: "" },
   survey: { cards: [], total: 0, offset: 0, limit: 200, sel: 0, flipAll: false, loading: false },
   exemplarCtx: null,
   exemplarVerdict: null,
@@ -297,7 +297,8 @@ async function approveCard() {
 
 // --- repair ---------------------------------------------------------------
 async function loadRepair() {
-  const data = await api.get("/api/repair");
+  const q = state.repair.deck ? "?deck=" + encodeURIComponent(state.repair.deck) : "";
+  const data = await api.get("/api/repair" + q);
   if (data.error) {
     state.repair.cards = [];
     $("repair-empty").textContent = "anki not reachable";
@@ -307,11 +308,23 @@ async function loadRepair() {
     return;
   }
   state.repair.cards = data.cards;
+  populateRepairDecks(data.decks || {});
   assignSeq(data.cards.map((c) => "r:" + c.card_id));
   if (state.repair.idx >= data.cards.length) state.repair.idx = Math.max(0, data.cards.length - 1);
   state.repair.front = false;
   renderRepair();
   updateBadges();
+}
+
+function populateRepairDecks(decks) {
+  // a deck whose flags are all cleared drops out -> fall back to "all"
+  if (state.repair.deck && !(state.repair.deck in decks)) state.repair.deck = "";
+  const total = Object.values(decks).reduce((a, b) => a + b, 0);
+  const names = Object.keys(decks).sort();
+  $("repair-deck").innerHTML = [`<option value="">all decks (${total})</option>`]
+    .concat(names.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)} (${decks[d]})</option>`))
+    .join("");
+  $("repair-deck").value = state.repair.deck;
 }
 
 function flagName(f) {
@@ -323,7 +336,7 @@ function renderRepair() {
   const desk = $("repair-desk");
   if (!cards.length) {
     desk.style.display = "none";
-    $("repair-empty").textContent = "no flagged cards";
+    $("repair-empty").textContent = state.repair.deck ? "no flagged cards in this deck" : "no flagged cards";
     $("repair-empty").hidden = false;
     return;
   }
@@ -811,9 +824,16 @@ function historyDetail(r) {
 }
 
 async function loadHistory() {
-  const data = await api.get("/api/history");
-  state.history = data.actions || [];
   const list = $("history-list");
+  let data;
+  try {
+    data = await api.get("/api/history");
+  } catch {
+    // a pre-history backend 404s with an HTML page -> json() throws
+    list.innerHTML = '<div class="empty">history unavailable — restart the server</div>';
+    return;
+  }
+  state.history = data.actions || [];
   if (!state.history.length) {
     list.innerHTML = '<div class="empty">no actions yet</div>';
     return;
@@ -1101,8 +1121,10 @@ function onKey(e) {
   if (!$("exemplar-prompt").hidden) {
     if (e.key === "Escape") { closeOverlays(); return; }
     if (!state.exemplarVerdict) {
-      if (e.key === "g") pickExemplarVerdict("good");
-      else if (e.key === "b") pickExemplarVerdict("bad");
+      // preventDefault: picking a verdict focuses the "why" box, and without
+      // it the same keystroke's character lands in the box as its first letter
+      if (e.key === "g") { e.preventDefault(); pickExemplarVerdict("good"); }
+      else if (e.key === "b") { e.preventDefault(); pickExemplarVerdict("bad"); }
       return;
     }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitExemplar(); }
@@ -1235,6 +1257,11 @@ $("inbox-deck").addEventListener("change", () => {
   state.inbox.deck = $("inbox-deck").value;
   state.inbox.idx = 0;
   loadInbox();
+});
+$("repair-deck").addEventListener("change", () => {
+  state.repair.deck = $("repair-deck").value;
+  state.repair.idx = 0;
+  loadRepair();
 });
 
 // stats: range toggle, chart tooltips, re-render on resize
