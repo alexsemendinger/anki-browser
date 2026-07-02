@@ -901,6 +901,22 @@ function closeOverlays() {
   setMode("normal");
 }
 
+// If focus wanders out of a single-box overlay (a click on the card puts it
+// inside the sandboxed iframe), keystrokes reach this handler instead of the
+// box and would be silently dropped — the comment then submits empty. Pull
+// focus back and route the character in.
+function reclaimTyping(box, e) {
+  if (document.activeElement === box) return;
+  box.focus();
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault(); // a real event would now also insert into the box
+    box.value += e.key;
+  } else if (e.key === "Backspace") {
+    e.preventDefault();
+    box.value = box.value.slice(0, -1);
+  }
+}
+
 function openEditor() {
   let fields, order, title, onSave, head = "";
   if (state.surface === "inbox") {
@@ -993,7 +1009,7 @@ async function submitComment() {
   // into this slot -- keep idx where it is.
   await loadInbox();
   await refreshSession();
-  toast("sent back → bottom", "info");
+  toast(text ? "sent back → bottom" : "sent back · no comment", "info");
 }
 
 function openSession() {
@@ -1105,7 +1121,8 @@ function onKey(e) {
   }
   if (!$("commenter").hidden) {
     if (e.key === "Escape") { closeOverlays(); return; }
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitComment(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitComment(); return; }
+    reclaimTyping($("comment-text"), e);
     return;
   }
   if (!$("session-prompt").hidden) {
@@ -1127,7 +1144,8 @@ function onKey(e) {
       else if (e.key === "b") { e.preventDefault(); pickExemplarVerdict("bad"); }
       return;
     }
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitExemplar(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitExemplar(); return; }
+    reclaimTyping($("exemplar-comment"), e);
     return;
   }
   if (!$("settings").hidden) {
