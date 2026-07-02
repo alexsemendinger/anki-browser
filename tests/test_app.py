@@ -175,6 +175,45 @@ def test_repair_flow_and_undo(client):
     assert fake.cards[9001]["flag"] == 1
 
 
+def test_inbox_exemplar_comment_attaches_to_card_and_undo(client):
+    card = _seed_inbox(client.cfg)
+    payload = {
+        "verdict": "bad",
+        "card_id": card["id"],
+        "note_type": "Basic",
+        "fields": {"Front": "Q"},
+        "rendered": {"question": "Q", "answer": "A", "css": ""},
+        "comment": "too vague",
+    }
+    client.post("/api/exemplar", json=payload)
+    got = inbox.get_card(client.cfg["paths"]["inbox"], card["id"])
+    assert got["comment_history"] == [
+        {"date": got["comment_history"][0]["date"], "author": "me · exemplar bad", "text": "too vague"}
+    ]
+    assert client.get("/api/exemplars").get_json()["count"] == 1
+
+    # undoing the exemplar removes the snapshot AND the attached comment
+    client.post("/api/undo")
+    assert client.get("/api/exemplars").get_json()["count"] == 0
+    assert inbox.get_card(client.cfg["paths"]["inbox"], card["id"])["comment_history"] == []
+
+
+def test_inbox_exemplar_without_comment_leaves_card_alone(client):
+    card = _seed_inbox(client.cfg)
+    payload = {
+        "verdict": "good",
+        "card_id": card["id"],
+        "note_type": "Basic",
+        "fields": {"Front": "Q"},
+        "rendered": {"question": "Q", "answer": "A", "css": ""},
+        "comment": "",
+    }
+    client.post("/api/exemplar", json=payload)
+    assert inbox.get_card(client.cfg["paths"]["inbox"], card["id"])["comment_history"] == []
+    client.post("/api/undo")
+    assert client.get("/api/exemplars").get_json()["count"] == 0
+
+
 def test_repair_deck_filter(client):
     fake = client.fake
     fake.notes[5001] = {"fields": {"Front": "a", "Back": "b"}, "model": "Basic", "deck": "Default"}

@@ -54,6 +54,9 @@ Anki.** The through-line, in Alex's words and choices:
 - **Exemplars are frozen good/bad reference snapshots with reasons** — content
   captured at a moment, *not* a live note reference (so a later-fixed card still
   reads as it was judged). The intent is that an AI could later read them.
+  One judgment, one record: marking an inbox card as an exemplar also appends
+  the "why" to that card's `comment_history` (author `me · exemplar good/bad`);
+  undoing the exemplar removes both.
 - **Nothing is hard-deleted; everything is inspectable.** Deletes go to the
   graveyard (restorable); undo is LIFO and persisted. Alex repeatedly wanted to
   *see* things — the graveyard, exemplars, comments — rendered as real cards.

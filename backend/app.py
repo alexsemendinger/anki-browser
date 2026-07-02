@@ -376,8 +376,25 @@ def create_app(cfg=None):
             comment=body.get("comment", ""),
             deck=body.get("deck"),
         )
+        # one judgment, one record: the "why" of an inbox exemplar is also a
+        # comment on the card itself, so the generator sees it on send-back
+        card_id = body.get("card_id")
+        comment = (body.get("comment") or "").strip()
+        commented = False
+        if card_id and comment:
+            commented = (
+                inbox.add_comment(
+                    paths["inbox"], card_id, comment, author="me · exemplar %s" % verdict
+                )
+                is not None
+            )
         stats.record(paths["stats"], "exemplar_%s" % verdict)
-        actions.push(paths["actions"], "exemplar", {}, "exemplar %s" % verdict)
+        actions.push(
+            paths["actions"],
+            "exemplar",
+            {"card_id": card_id, "commented": commented},
+            "exemplar %s" % verdict,
+        )
         maybe_push_beeminder()
         return jsonify({"ok": True})
 
@@ -464,6 +481,8 @@ def create_app(cfg=None):
                     pass
         elif kind == "exemplar":
             _delete_exemplar_near(record["ts"])
+            if payload.get("commented"):
+                inbox.pop_comment(paths["inbox"], payload["card_id"])
 
     def _undo_at(index):
         stack = actions.list_all(paths["actions"])

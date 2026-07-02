@@ -768,6 +768,7 @@ function startExemplar() {
     const item = state.inbox.cards[state.inbox.idx];
     if (!item) return;
     ctx = {
+      card_id: item.card.id, // the "why" also lands in the card's comment_history
       note_type: item.card.note_type,
       deck: item.card.deck,
       fields: item.card.fields,
@@ -813,6 +814,7 @@ async function commitExemplar() {
   if (!ctx || !verdict) return;
   const res = await api.send("/api/exemplar", "POST", { ...ctx, verdict, comment });
   toast(res.ok ? "exemplar " + verdict : "failed", res.ok ? "ok" : undefined);
+  if (res.ok && ctx.card_id && comment) await loadInbox(); // comment now shows in the rail
 }
 
 // --- history (arbitrary undo) -----------------------------------------------
